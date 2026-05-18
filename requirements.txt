@@ -2,3 +2,5 @@ fastapi==0.136.1
 uvicorn[standard]==0.47.0
 influxdb3-python==0.19.0
 numpy==2.4.5
+pydantic
+pydantic-settings
