@@ -1,5 +1,8 @@
+from typing import Any
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -7,13 +10,14 @@ class Settings(BaseSettings):
     INFLUXDB_HOST: str
     INFLUXDB_TOKEN: str
     INFLUXDB_DATABASE: str
-    CORS_ORIGINS: list[str] = ["*"]
+    CORS_ORIGINS: list[str] = ["http://localhost:5173"]
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
-    def parse_cors_origins(cls, v: any) -> list[str]:
+    def parse_cors_origins(cls, v: Any) -> list[str] | Any:
         if isinstance(v, str) and not v.startswith("["):
             return [item.strip() for item in v.split(",")]
         return v
+
 
 settings = Settings()

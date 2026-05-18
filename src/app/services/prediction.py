@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def predict_features(features: list[float]) -> float:
-    # ML model (e.g., .pkl-File)
+    # TODO: replace placeholder mean with a trained model (e.g. loaded from a .pkl file).
     return float(np.mean(features))
