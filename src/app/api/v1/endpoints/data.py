@@ -1,12 +1,12 @@
 import influxdb_client_3 as influxdb3
 from fastapi import APIRouter, HTTPException, Depends
-from app.schemas.schemas import WriteBody, QueryBody
+from app.schemas.schemas import DataWriteRequest, QueryRequest
 from app.api.dependencies import get_influx_client
 
 router = APIRouter()
 
 @router.post("/write", status_code=201)
-def write_data(body: WriteBody, db: influxdb3.InfluxDBClient3 = Depends(get_influx_client)):
+def write_data(body: DataWriteRequest, db: influxdb3.InfluxDBClient3 = Depends(get_influx_client)):
     try:
         db.write(record={"measurement": body.measurement, "tags": body.tags, "fields": body.fields})
         return {"message": "written"}
@@ -14,7 +14,7 @@ def write_data(body: WriteBody, db: influxdb3.InfluxDBClient3 = Depends(get_infl
         raise HTTPException(502, detail=str(exc)) from exc
 
 @router.post("/query")
-def query_data(body: QueryBody, db: influxdb3.InfluxDBClient3 = Depends(get_influx_client)):
+def query_data(body: QueryRequest, db: influxdb3.InfluxDBClient3 = Depends(get_influx_client)):
     try:
         result = db.query(body.sql)
         return {"results": result.to_pydict() if result is not None else []}
