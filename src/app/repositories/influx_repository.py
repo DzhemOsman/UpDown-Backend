@@ -14,10 +14,10 @@ def write_points(points: list[Point]) -> None:
     client.write(record=points)
 
 
-def get_latest_timestamp(ticker: str) -> None | Timestamp | Series | DatetimeIndex:
+def get_latest_timestamp(ticker: str) -> None | Timestamp:
     client = get_client()
 
-    request = QueryRequest(f"""SELECT MAX(time) AS latest_time FROM {MEASUREMENT} WHERE ticker = '{ticker}'""")
+    request = QueryRequest(sql = f"SELECT MAX(time) AS latest_time FROM {MEASUREMENT} WHERE ticker = '{ticker}'")
 
     result = client.query(request.sql)
     if result is None:
@@ -43,7 +43,7 @@ def get_data_for_ticker_and_range(
     start_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
     end_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
 
-    request = QueryRequest(f"""SELECT * FROM {MEASUREMENT} WHERE ticker = '{ticker}' AND time >= '{start_str}' AND time <= '{end_str}' ORDER BY time""")
+    request = QueryRequest(sql = f"SELECT * FROM '{MEASUREMENT}' WHERE ticker = '{ticker}' AND time >= '{start_str}' AND time <= '{end_str}' ORDER BY time")
 
     result = client.query(request.sql)
     if result is None:

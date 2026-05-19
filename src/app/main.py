@@ -17,6 +17,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         app.state.influx_client.close()
+        get_client.cache_clear()
 
 app = FastAPI(title="UpDown Backend", version="0.1.0", lifespan=lifespan)
 
