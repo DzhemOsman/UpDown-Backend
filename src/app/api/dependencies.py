@@ -1,6 +1,7 @@
 import influxdb_client_3 as influxdb3
-from fastapi import Request
+
+from app.core.influx import get_client
 
 
-def get_influx_client(request: Request) -> influxdb3.InfluxDBClient3:
-    return request.app.state.influx_client
+def get_influx_client() -> influxdb3.InfluxDBClient3:
+    return get_client()
