@@ -17,7 +17,7 @@ def write_points(points: list[Point]) -> None:
 def get_latest_timestamp(ticker: str) -> None | Timestamp | Series | DatetimeIndex:
     client = get_client()
 
-    request = QueryRequest(f"""SELECT MAX(time) AS latest_time FROM {MEASUREMENT}WHERE ticker = '{ticker}'""")
+    request = QueryRequest(f"""SELECT MAX(time) AS latest_time FROM {MEASUREMENT} WHERE ticker = '{ticker}'""")
 
     result = client.query(request.sql)
     if result is None:
@@ -31,7 +31,7 @@ def get_latest_timestamp(ticker: str) -> None | Timestamp | Series | DatetimeInd
     if pd.isna(latest):
         return None
 
-    return pd.to_datetime(data["latest_time"][0], utc=True)
+    return latest
 
 def get_data_for_ticker_and_range(
     ticker: str,

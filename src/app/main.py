@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI
@@ -8,7 +9,16 @@ from app.api.v1.router import api_router
 from app.config import get_settings
 from app.core.influx import get_client
 
-app = FastAPI(title="UpDown Backend", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.influx_client = get_client()
+    try:
+        yield
+    finally:
+        app.state.influx_client.close()
+
+app = FastAPI(title="UpDown Backend", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

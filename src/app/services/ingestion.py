@@ -40,7 +40,7 @@ def ingest_ticker(ticker: str, start: str = START_DATE) -> int:
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
-    df = df.dropna(subset=["Open", "High", "Low", "Close"])
+    df = df.dropna(subset=["Open", "High", "Low", "Close", "Volume"])
 
     points: list[Point] = []
     for ts, row in df.iterrows():
@@ -70,7 +70,3 @@ def ingest_all(tickers: Iterable[str]) -> None:
         except Exception as exc:
             print(f"[{ticker}] FEHLER: {exc}")
     print(f"\n--- Fertig. Gesamt: {total} neue Points ---")
-
-
-if __name__ == "__main__":
-    ingest_all()
