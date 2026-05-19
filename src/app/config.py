@@ -1,11 +1,18 @@
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+BASE_DIR = Path(__file__).resolve().parents[2]
+MEASUREMENT = "ohlcv_daily"
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=BASE_DIR / ".env",
+        extra="ignore",
+    )
 
     INFLUXDB_HOST: str
     INFLUXDB_TOKEN: str
@@ -20,4 +27,6 @@ class Settings(BaseSettings):
         return v
 
 
-settings = Settings()
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()

@@ -1,31 +1,18 @@
-from contextlib import asynccontextmanager
+from datetime import datetime
 
-import influxdb_client_3 as influxdb3
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.services import market_data
 from app.api.v1.router import api_router
-from app.config import settings
+from app.config import get_settings
+from app.core.influx import get_client
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    app.state.influx_client = influxdb3.InfluxDBClient3(
-        host=settings.INFLUXDB_HOST,
-        token=settings.INFLUXDB_TOKEN,
-        database=settings.INFLUXDB_DATABASE,
-    )
-    try:
-        yield
-    finally:
-        app.state.influx_client.close()
-
-
-app = FastAPI(title="UpDown Backend", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="UpDown Backend", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=get_settings().CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,3 +25,12 @@ def health():
 
 
 app.include_router(api_router, prefix="/v1")
+
+if __name__ == "__main__":
+    client = get_client()
+    result = market_data.fetch_ticker_data(
+        ticker = "DBK",
+        start_date = datetime(2000, 1, 1),
+        end_date =datetime(2020, 6, 30)
+    )
+    print(result.to_string(index=False))
