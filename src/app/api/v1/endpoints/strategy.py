@@ -10,7 +10,7 @@ from app.services import market_data, unoptimized_mean_reversion
 router = APIRouter()
 
 DEFAULT_START = datetime(2000, 1, 1)
-DEFAULT_END = datetime(2025, 1, 1)
+DEFAULT_END = datetime.now()
 
 
 @router.post("/optimize/grid-search", response_model=BestStrategyResponse)
