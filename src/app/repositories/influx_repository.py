@@ -2,11 +2,11 @@ from datetime import datetime
 
 import pandas as pd
 from influxdb_client_3 import Point
-from pandas import DatetimeIndex, Series, Timestamp
+from pandas import Timestamp
 
 from app.core.influx import get_client
 from app.config import MEASUREMENT
-from app.schemas.schemas import QueryRequest
+from app.schemas.query_request import QueryRequest
 
 
 def write_points(points: list[Point]) -> None:

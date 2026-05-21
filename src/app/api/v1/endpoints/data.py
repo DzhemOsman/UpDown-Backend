@@ -2,7 +2,8 @@ import influxdb_client_3 as influxdb3
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.dependencies import get_influx_client
-from app.schemas.schemas import DataWriteRequest, QueryRequest
+from app.schemas.data_write_request import DataWriteRequest
+from app.schemas.query_request import QueryRequest
 
 router = APIRouter()
 
