@@ -13,9 +13,9 @@ DEFAULT_START = datetime(2000, 1, 1)
 DEFAULT_END = datetime(2025, 1, 1)
 
 
-@router.post("/optimize", response_model=BestStrategyResponse)
+@router.post("/optimize/grid-search", response_model=BestStrategyResponse)
 def get_best_strategy(request: OptimizationRequest):
-    result = unoptimized_mean_reversion.optimize(
+    result = unoptimized_mean_reversion.optimize_grid_search(
         tickers=request.tickers,
         drop_options=request.drop_options,
         hold_options=request.hold_options,

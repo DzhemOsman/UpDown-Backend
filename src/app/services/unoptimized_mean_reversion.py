@@ -255,9 +255,9 @@ def calculate_comparison_curves(trades, tickers, initial_capital,
     return chart_data
 
 
-def optimize(tickers, drop_options, hold_options, take_profit_options,
-             initial_capital=10000.0, start: datetime = DEFAULT_START,
-             end: datetime = DEFAULT_END):
+def optimize_grid_search(tickers, drop_options, hold_options, take_profit_options,
+                         initial_capital=10000.0, start: datetime = DEFAULT_START,
+                         end: datetime = DEFAULT_END):
     """Grid-Search über alle Parameter-Kombinationen. Liefert die beste
     Konfiguration nach ROI samt Trades und Vergleichskurven.
 
