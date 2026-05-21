@@ -9,7 +9,7 @@ from app.services import market_data
 
 # Standard-Backtest-Fenster (entspricht dem bisherigen DataManager-Default).
 DEFAULT_START = datetime(2000, 1, 1)
-DEFAULT_END = datetime(2025, 1, 1)
+DEFAULT_END = datetime.now()
 
 
 class MeanReversionStrategy:
@@ -180,21 +180,6 @@ class MeanReversionStrategy:
                 all_trades.extend(trades)
         return all_trades
 
-
-def _load_close_series(ticker: str, all_dates: pd.DatetimeIndex,
-                       start: datetime, end: datetime) -> pd.Series | None:
-    """Lädt eine Close-Preisreihe aus InfluxDB, auf den gemeinsamen
-    Zeitstrahl reindiziert. Ersetzt den früheren data_dict-Zugriff.
-    """
-    df = market_data.fetch_ticker_data(ticker, start, end)
-    if df is None or df.empty:
-        return None
-
-    ts = pd.to_datetime(df["time"], utc=True).dt.tz_localize(None)
-    series = pd.Series(df["close"].to_numpy(), index=pd.DatetimeIndex(ts)).sort_index()
-    return series.reindex(all_dates).ffill().bfill()
-
-
 def calculate_comparison_curves(trades, tickers, initial_capital,
                                 start: datetime, end: datetime):
     """
@@ -313,3 +298,46 @@ def optimize_grid_search(tickers, drop_options, hold_options, take_profit_option
         "equity_curve_data": equity_data,
         "trades": best_trades,
     }
+
+def main():
+    tickers = ["AAPL", "MSFT", "DBK"]
+
+    result = optimize_grid_search(
+        tickers=tickers,
+        drop_options=[3, 4, 5, 6, 7],
+        hold_options=[2, 3, 4, 5, 6],
+        take_profit_options=[1.5, 2.0, 2.5, 3.0],
+        initial_capital=10000.0,
+        start=datetime(2018, 1, 1),
+        end=datetime(2024, 12, 31),
+    )
+
+    if result is None:
+        print("Keine gültige Konfiguration gefunden.")
+        return
+
+    print("\n=== BESTE KONFIGURATION ===")
+    print(f"Drop Threshold:   {result['best_drop']}%")
+    print(f"Hold Days:        {result['best_hold']}")
+    print(f"Take Profit:      {result['best_tp']}%")
+    print(f"Stop Loss:        keins")
+
+    print("\n=== PERFORMANCE ===")
+    print(f"ROI:              {result['roi_pct']}%")
+    print(f"Total Profit:     {result['total_profit']}")
+    print(f"Win Rate:         {result['win_rate']}%")
+    print(f"Total Trades:     {result['total_trades']}")
+    print(f"Search Type:      {result.get('search_type', 'grid')}")
+    print(f"Trials:           {result.get('trials', 'n/a')}")
+
+    """print("\n=== ERSTE 5 TRADES ===")
+    for trade in result["trades"][:5]:
+        pprint(trade)
+
+    print("\n=== ERSTE 5 EQUITY-PUNKTE ===")
+    for point in result["equity_curve_data"][:5]:
+        pprint(point)
+    """
+
+if __name__ == "__main__":
+    main()

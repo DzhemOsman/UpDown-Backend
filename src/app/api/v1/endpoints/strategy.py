@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.schemas.best_strategy_response import BestStrategyResponse
 from app.schemas.optimization_request import OptimizationRequest
-from app.services import market_data, unoptimized_mean_reversion
+from app.services import market_data, unoptimized_mean_reversion, optimized_mean_reversion
 
 router = APIRouter()
 
@@ -14,13 +14,29 @@ DEFAULT_END = datetime.now()
 
 
 @router.post("/optimize/grid-search", response_model=BestStrategyResponse)
-def get_best_strategy(request: OptimizationRequest):
+def get_grid_search_strategy(request: OptimizationRequest):
     result = unoptimized_mean_reversion.optimize_grid_search(
         tickers=request.tickers,
         drop_options=request.drop_options,
         hold_options=request.hold_options,
         take_profit_options=request.take_profit_options,
         initial_capital=request.initial_capital,
+    )
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Keine profitablen Trades gefunden.")
+
+    return result
+
+@router.post("/optimize/maximum-subarray-search", response_model=BestStrategyResponse)
+def get_maximum_subarray_strategy(request: OptimizationRequest):
+    result = optimized_mean_reversion.optimize_grid_search(
+        tickers=request.tickers,
+        drop_options=request.drop_options,
+        hold_options=request.hold_options,
+        take_profit_options=request.take_profit_options,
+        initial_capital=request.initial_capital,
+        stop_loss_options=request.stop_loss,
     )
 
     if result is None:

@@ -13,6 +13,12 @@ START_DATE = "2000-01-01"
 
 
 def ingest_ticker(ticker: str, start: str = START_DATE) -> int:
+    print(f"[DEBUG] ingest_ticker aufgerufen mit: ticker='{ticker}'")  # NEU
+
+    if not ticker or not isinstance(ticker, str):
+        print(f"[{ticker}] FEHLER: Ungültiger Ticker")
+
+
     latest = get_latest_timestamp(ticker)
     if latest is not None:
         start = (latest + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
@@ -66,7 +72,7 @@ def ingest_all(tickers: Iterable[str]) -> None:
     total = 0
     for ticker in tickers:
         try:
-            total += ingest_ticker(ticker)
+            total += ingest_ticker(ticker,start=start)
         except Exception as exc:
             print(f"[{ticker}] FEHLER: {exc}")
     print(f"\n--- Fertig. Gesamt: {total} neue Points ---")
