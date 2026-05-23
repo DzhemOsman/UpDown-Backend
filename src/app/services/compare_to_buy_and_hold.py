@@ -10,11 +10,15 @@ def calculate_comparison_curves(
         initial_capital: int
 ) -> list[ChartDataDict]:
     """
+    Berechnet die Vergleichskurven zwischen einer Handelsstrategie und einer Buy & Hold Benchmark.
+    Die Funktion ermittelt für jeden Handelstag die kumulierte Equity der Strategie
+    und vergleicht sie mit der Equity einer Buy & Hold Strategie, die gleichmäßig
+    auf alle Ticker aufgeteilt ist.
 
-    :param trades:
-    :param ticker_data:
-    :param initial_capital:
-    :return:
+    :param trades: Liste der durchgeführten Transaktionen mit Verkaufsdatum und Gewinn
+    :param ticker_data: Dictionary mit Ticker-Symbolen als Keys und DataFrames mit Kursdaten als Values
+    :param initial_capital: Startkapital
+    :return: Liste von ChartDataDict Objekten mit Datum, Strategie-Equity und Buy & Hold Equity
     """
     # Berechnet tages genau die Strategie-Equity vs. Buy & Hold Benchmark.
     close_series: dict[str, pd.Series] = {}
@@ -22,7 +26,7 @@ def calculate_comparison_curves(
     for ticker, ticker_df in ticker_data.items():
         if ticker_df is not None and not ticker_df.empty:
             timestamp = pd.to_datetime(ticker_df.index, utc=True).tz_localize(None)
-            series = pd.Series(ticker_df["close"].to_numpy(), index=pd.DatetimeIndex(timestamp)).sort_index()
+            series = pd.Series(ticker_df["close"].to_numpy(), index=timestamp).sort_index()
             close_series[ticker] = series
             all_dates = all_dates.union(series.index)
 
@@ -61,12 +65,12 @@ def calculate_comparison_curves(
     chart_data = []
     curve_df = curve_df.ffill().fillna(initial_capital)
 
-    for date, row in curve_df.iterrows():
+    for row in curve_df.itertuples(index=True):
         chart_data.append(
             ChartDataDict(
-                date=date.strftime('%Y-%m-%d'),
-                equity=round(row['strategy_equity'], 2),
-                buy_and_hold=round(row['benchmark_equity'], 2)
+                date=row.Index.strftime('%Y-%m-%d'),
+                equity=round(row.strategy_equity, 2),
+                buy_and_hold=round(row.benchmark_equity, 2)
             )
         )
 
