@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import logging
 from datetime import datetime
 
@@ -171,7 +172,7 @@ class MeanReversionWithMoneyManagement:
         open_prices = ticker_df['open'].to_numpy()
         high_prices = ticker_df['high'].to_numpy()
         low_prices = ticker_df['low'].to_numpy()
-        close_prices = ticker_df['open'].to_numpy()
+        close_prices = ticker_df['close'].to_numpy()
         dates = ticker_df.index
 
         for idx in signal_indices:
@@ -298,46 +299,43 @@ def optimize_money_management_with_grid_search(
     best_trades = None
     best_params = None
 
-    for drop in drop_options:
-        for hold in hold_options:
-            for tp in take_profit_options:
-                for sl in stop_loss_options:
-                    for max_pos in max_positions_options:
-                        for alloc in allocation_options:
+    # itertools.product verhindert 6-fache Schleifen-Verschachtelung (Arrow Anti-Pattern)
+    for drop, hold, tp, sl, max_pos, alloc in itertools.product(
+            drop_options, hold_options, take_profit_options, stop_loss_options, max_positions_options, allocation_options
+    ):
+        current_params = ParameterCombinationDict(
+            drop_threshold=drop,
+            lookback_days=DEFAULT_LOOKBACK_DAYS,
+            hold_days=hold,
+            take_profit_pct=tp,
+            stop_loss_pct=sl,
+            max_positions=max_pos,
+            allocation_pct=alloc,
+            fee_pct=DEFAULT_FEE_RATE
+        )
+        trades = bot.run_portfolio_with_money_management(tickers, current_params)
 
-                            current_params = ParameterCombinationDict(
-                                drop_threshold=drop,
-                                lookback_days=DEFAULT_LOOKBACK_DAYS,
-                                hold_days=hold,
-                                take_profit_pct=tp,
-                                stop_loss_pct=sl,
-                                max_positions=max_pos,
-                                allocation_pct=alloc,
-                                fee_pct=DEFAULT_FEE_RATE
-                            )
-                            trades = bot.run_portfolio_with_money_management(tickers, current_params)
+        if trades:
+            current_trades_df = pd.DataFrame(trades)
+            current_profit = current_trades_df['profit_abs'].sum()
+            current_roi = (current_profit / initial_capital) * 100
+            # Pandas Best Practice: Wahrheitswerte (True/False) als Mean berechnen
+            current_win_rate = (current_trades_df['profit_abs'] > 0).mean() * 100
+        else:
+            current_profit = 0
+            current_roi = 0
+            current_win_rate = 0
 
-                            if trades:
-                                current_trades_df = pd.DataFrame(trades)
-                                current_profit = current_trades_df['profit_abs'].sum()
-                                current_roi = (current_profit / initial_capital) * 100
-                                current_win_rate = len(current_trades_df[current_trades_df['profit_abs'] > 0]) / len(
-                                    current_trades_df) * 100
-                            else:
-                                current_profit = 0
-                                current_roi = 0
-                                current_win_rate = 0
+        if current_roi > best_roi:
+            best_roi = current_roi
+            best_trades = trades
+            best_params = current_params
 
-                            if current_roi > best_roi:
-                                best_roi = current_roi
-                                best_trades = trades
-                                best_params = current_params
-
-                                best_result = BestResultDict(
-                                    profit=current_profit,
-                                    win_rate=current_win_rate,
-                                    total_number_of_trades=len(trades)
-                                )
+            best_result = BestResultDict(
+                profit=current_profit,
+                win_rate=current_win_rate,
+                total_number_of_trades=len(trades)
+            )
 
     if best_params is None or best_result is None or best_trades is None:
         return None
@@ -455,7 +453,8 @@ def optimize_bayesian(
 
     best_trades_df = pd.DataFrame(best_trades)
     current_profit = best_trades_df['profit_abs'].sum()
-    current_win_rate = len(best_trades_df[best_trades_df['profit_abs'] > 0]) / len(best_trades_df) * 100
+    # Pandas Best Practice für Win Rate
+    current_win_rate = (best_trades_df['profit_abs'] > 0).mean() * 100
 
     equity_data = calculate_comparison_curves(best_trades, bot.get_cached_ticker_data(), initial_capital)
 
