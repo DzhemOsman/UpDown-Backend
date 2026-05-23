@@ -4,12 +4,13 @@ from datetime import datetime
 
 from app.services.mean_reversion_strategies.mean_reversion_defaults import DEFAULT_INITIAL_CAPITAL
 from app.services.mean_reversion_strategies.mean_reversion_strategy import optimize_grid_search
-from app.services.mean_reversion_strategies.money_management_reversion import(
+from app.services.mean_reversion_strategies.money_management_reversion import (
     optimize_money_management_with_grid_search,
     optimize_bayesian
 )
 
 logger = logging.getLogger(__name__)
+
 
 def compare_grid_search_and_bayesian(tickers: list[str]):
     # Gleicher Zeitraum für fairen Vergleich
@@ -105,14 +106,16 @@ def compare_grid_search_and_bayesian(tickers: list[str]):
             logger.info(
                 f"=> Grid Search war {speedup:.1f}x SCHNELLER! (Wahrscheinlich war der Parameter-Raum für Grid zu klein gewählt)")
 
-def test_money_management_with_bayesian(tickers: list[str], is_kadane: bool = False):
+
+def test_money_management_with_bayesian(tickers: list[str], is_kadane: bool = False, is_trend: bool = False):
     result = optimize_bayesian(
         tickers=tickers,
-        n_trials=100, # 100 Versuche sind oft schon extrem gut und schnell
+        n_trials=100,  # 100 Versuche sind oft schon extrem gut und schnell
         initial_capital=DEFAULT_INITIAL_CAPITAL,
         start=datetime(2014, 1, 1),
         end=datetime(2024, 12, 31),
-        is_kadane=is_kadane
+        is_kadane=is_kadane,
+        is_trend=is_trend
     )
 
     if result is None:
@@ -127,6 +130,7 @@ def test_money_management_with_bayesian(tickers: list[str], is_kadane: bool = Fa
     logger.info(f"Max Positions:    {result['best_max_positions']}")
     logger.info(f"Capital Alloc:    {result['best_allocation_pct']}% pro Trade")
     logger.info(f"Kadane:           {is_kadane}")
+    logger.info(f"SMA:              {is_trend}")
 
     logger.info("\n=== PERFORMANCE ===")
     logger.info(f"ROI:              {result['roi_pct']}%")
@@ -143,19 +147,21 @@ def test_money_management_with_bayesian(tickers: list[str], is_kadane: bool = Fa
     for point in result["equity_curve_data"][:10]:
         logger.info(point)
 
-def test_money_management_with_grid_search(tickers: list[str], is_kadane: bool = False):
+
+def test_money_management_with_grid_search(tickers: list[str], is_kadane: bool = False, is_trend: bool = False):
     result = optimize_money_management_with_grid_search(
         tickers=tickers,
         drop_options=[3, 4, 5],
         hold_options=[2, 3, 5],
         take_profit_options=[2.0, 3.0],
         stop_loss_options=[2.0, 5.0, 10.0],
-        max_positions_options=[1, 2,],
-        allocation_options=[10.0, 20.0,],
+        max_positions_options=[1, 2, ],
+        allocation_options=[10.0, 20.0, ],
         initial_capital=DEFAULT_INITIAL_CAPITAL,
         start=datetime(2014, 1, 1),
         end=datetime(2024, 12, 31),
-        is_kadane = is_kadane
+        is_kadane=is_kadane,
+        is_trend=is_trend
     )
 
     if result is None:
@@ -170,6 +176,7 @@ def test_money_management_with_grid_search(tickers: list[str], is_kadane: bool =
     logger.info(f"Max Positions:    {result['best_max_positions']}")
     logger.info(f"Capital Alloc:    {result['best_allocation_pct']}% pro Trade")
     logger.info(f"Kadane:           {is_kadane}")
+    logger.info(f"SMA:              {is_trend}")
 
     logger.info("\n=== PERFORMANCE ===")
     logger.info(f"ROI:              {result['roi_pct']}%")
@@ -185,6 +192,7 @@ def test_money_management_with_grid_search(tickers: list[str], is_kadane: bool =
     logger.info("\n=== ERSTE 5 EQUITY-PUNKTE ===")
     for point in result["equity_curve_data"][:5]:
         logger.info(point)
+
 
 def test_old_mean_reversion():
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -233,10 +241,11 @@ if __name__ == "__main__":
     # tickers = ["AAPL", "MSFT", "DBK", "TSLA", "NVDA", "CRM"]
     tickers = ["MSFT", "AAPL"]
 
-    test_money_management_with_bayesian(tickers)
-    test_money_management_with_bayesian(tickers, is_kadane=True)
+    #test_money_management_with_bayesian(tickers)
+    #test_money_management_with_bayesian(tickers, is_kadane=True)
 
     test_money_management_with_grid_search(tickers)
     test_money_management_with_grid_search(tickers, is_kadane=True)
-    #compare_grid_search_and_bayesian(tickers)
-
+    test_money_management_with_grid_search(tickers, is_trend=True)
+    test_money_management_with_grid_search(tickers, is_kadane=True, is_trend=True)
+    # compare_grid_search_and_bayesian(tickers)
