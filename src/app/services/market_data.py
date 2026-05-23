@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 import pandas as pd
 
 from app.repositories.influx_repository import get_data_for_ticker_and_range
 from app.services.ingestion import ingest_ticker
+
+logger = logging.getLogger(__name__)
 
 
 def fetch_ticker_data(
@@ -32,18 +35,23 @@ def fetch_ticker_data(
     try:
         df = get_data_for_ticker_and_range(ticker, start_date, end_date)
     except Exception as e:
-        print(f"{ticker}: {e}")
+        logger.error(f"Fehler beim Abrufen der Daten für {ticker}: {e}", exc_info=True)
         needs_ingestion = True
 
     if df is None or df.empty:
         needs_ingestion = True
     else:
         if "time" in df.columns:
-            earliest_available = pd.to_datetime(df["time"]).min()
-            if start_date < earliest_available:
+            # Garantiert, dass beide Objekte Timezone-naive sind.
+            earliest_available_naive = pd.to_datetime(df["time"]).min().tz_localize(None)
+            start_date_naive = pd.to_datetime(start_date).tz_localize(None)
+            
+            # Toleranz, da an Wochenenden und Feiertagen (z.B. Neujahr) keine Börsendaten existieren
+            if start_date_naive < (earliest_available_naive - pd.Timedelta(days=3)):
                 needs_ingestion = True
 
     if needs_ingestion:
+        logger.info(f"Daten für {ticker} unvollständig oder fehlen. Starte Ingestion-Prozess...")
         written = ingest_ticker(
             ticker,
             start=start_date,
