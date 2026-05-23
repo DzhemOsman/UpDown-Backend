@@ -5,7 +5,8 @@ from fastapi import APIRouter, HTTPException
 
 from app.schemas.api.best_strategy_response import BestStrategyResponse
 from app.schemas.api.optimization_request import OptimizationRequest
-from app.services import market_data, mean_reversion_strategy
+from app.services import market_data
+from app.services.mean_reversion_strategies import mean_reversion_strategy
 
 router = APIRouter()
 

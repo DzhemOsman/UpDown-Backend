@@ -12,15 +12,15 @@ from app.schemas.internal.best_parameter_combination_dict import (
     BestResultDict
 )
 from app.schemas.internal.trade_result_dict import TradeResultDict
-from app.services.backtest_data import get_backtest_data
-from app.services.compare_to_buy_and_hold import calculate_comparison_curves
-
-# Standardwerte
-DEFAULT_START = datetime(2000, 1, 1)
-DEFAULT_END = datetime(2026, 5, 1)
-DEFAULT_INITIAL_CAPITAL = 10_000
-DEFAULT_LOOKBACK_DAYS = 3
-DEFAULT_FEE_RATE = 0.001
+from app.services.mean_reversion_strategies.backtest_data import get_backtest_data
+from app.services.mean_reversion_strategies.compare_to_buy_and_hold import calculate_comparison_curves
+from app.services.mean_reversion_strategies.mean_reversion_defaults import (
+    DEFAULT_INITIAL_CAPITAL,
+    DEFAULT_START,
+    DEFAULT_END,
+    DEFAULT_LOOKBACK_DAYS,
+    DEFAULT_FEE_RATE
+)
 
 logger = logging.getLogger(__name__)
 
@@ -264,13 +264,7 @@ def optimize_grid_search(
                 if current_roi > best_roi:
                     best_roi = current_roi
                     best_trades = trades
-                    best_params = ParameterCombinationDict(
-                        drop_threshold=drop,
-                        hold_days=hold,
-                        take_profit_pct=tp,
-                        lookback_days=DEFAULT_LOOKBACK_DAYS,
-                        fee_pct=DEFAULT_FEE_RATE
-                    )
+                    best_params = current_params
                     best_result = BestResultDict(
                         profit=current_profit,
                         win_rate=current_win_rate,
@@ -293,49 +287,3 @@ def optimize_grid_search(
         equity_curve_data=equity_data,
         trades=best_trades
     )
-
-
-def main():
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    # tickers = ["AAPL", "MSFT", "DBK", "TSLA", "NVDA", "CRM"]
-    tickers = ["MSFT"]
-
-    result = optimize_grid_search(
-        tickers=tickers,
-        drop_options=[3, 4, 5, 6, 7],
-        hold_options=[2, 3, 4, 5, 6],
-        take_profit_options=[1.5, 2.0, 2.5, 3.0],
-        initial_capital=DEFAULT_INITIAL_CAPITAL,
-        start=datetime(2014, 1, 1),
-        end=datetime(2024, 12, 31)
-    )
-
-    if result is None:
-        logger.warning("Keine gültige Konfiguration gefunden.")
-        return
-
-    logger.info("\n=== BESTE KONFIGURATION ===")
-    logger.info(f"Drop Threshold:   {result['best_drop_threshold']}%")
-    logger.info(f"Hold Days:        {result['best_hold_days']}%")
-    logger.info(f"Take Profit:      {result['best_take_profit_pct']}%")
-    logger.info(f"Stop Loss:        keins")
-
-    logger.info("\n=== PERFORMANCE ===")
-    logger.info(f"ROI:              {result['roi_pct']}%")
-    logger.info(f"Total Profit:     {result['total_profit']}")
-    logger.info(f"Win Rate:         {result['win_rate']}%")
-    logger.info(f"Total Trades:     {result['total_number_of_trades']}")
-    logger.info(f"Search Type:      grid search")
-
-    """print("\n=== ERSTE 5 TRADES ===")
-    for trade in result["trades"][:5]:
-        pprint(trade)
-
-    print("\n=== ERSTE 5 EQUITY-PUNKTE ===")
-    for point in result["equity_curve_data"][:5]:
-        pprint(point)
-    """
-
-
-if __name__ == "__main__":
-    main()
