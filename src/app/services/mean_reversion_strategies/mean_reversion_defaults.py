@@ -1,0 +1,7 @@
+from datetime import datetime
+
+DEFAULT_START = datetime(2000, 1, 1)
+DEFAULT_END = datetime(2026, 5, 1)
+DEFAULT_INITIAL_CAPITAL = 10_000
+DEFAULT_LOOKBACK_DAYS = 3
+DEFAULT_FEE_RATE = 0.001

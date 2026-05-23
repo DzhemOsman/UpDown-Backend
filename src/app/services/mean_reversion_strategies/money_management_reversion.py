@@ -12,23 +12,22 @@ from app.schemas.internal.best_parameter_combination_dict import (
     BestResultDict
 )
 from app.schemas.internal.trade_result_dict import TradeResultDict
-from app.services.backtest_data import get_backtest_data
-from app.services.compare_to_buy_and_hold import calculate_comparison_curves
-
-# Standardwerte
-DEFAULT_START = datetime(2000, 1, 1)
-DEFAULT_END = datetime(2026, 5, 1)
-DEFAULT_INITIAL_CAPITAL = 10_000
-DEFAULT_LOOKBACK_DAYS = 3
-DEFAULT_FEE_RATE = 0.001
+from app.services.mean_reversion_strategies.backtest_data import get_backtest_data
+from app.services.mean_reversion_strategies.compare_to_buy_and_hold import calculate_comparison_curves
+from app.services.mean_reversion_strategies.mean_reversion_defaults import (
+    DEFAULT_INITIAL_CAPITAL,
+    DEFAULT_START,
+    DEFAULT_END,
+    DEFAULT_LOOKBACK_DAYS,
+    DEFAULT_FEE_RATE
+)
 
 logger = logging.getLogger(__name__)
 
 
-class MeanReversionStrategy:
+class MeanReversionWithMoneyManagement:
     """
-    Ursprünglicher Mean-Reversion-Algorithmus aus dem alten Projekt. Logik ist unverändert aber Code wurde angepasst,
-    um die Code-Quality zu erhöhen und die Performance zu verbessern.
+    Mean-Reversion-Algorithmus erweitert mit Money Management.
     """
     def __init__(
             self,
@@ -53,7 +52,7 @@ class MeanReversionStrategy:
         :param params: Parameter mit denen der Backtest durchgeführt wir
         :return: Eine Liste aller Transaktionen
         """
-        all_trades = []
+        all_potential_trades = []
 
         for ticker in tickers:
             trades = self._backtest(
@@ -62,11 +61,52 @@ class MeanReversionStrategy:
                 lookback_days=params['lookback_days'],
                 hold_days=params['hold_days'],
                 take_profit_pct=params['take_profit_pct'],
-                fee_rate=params['fee_pct']
+                fee_rate=params['fee_pct'],
+                stop_loss_pct=params['stop_loss_pct']
             )
             if trades:
-                all_trades.extend(trades)
-        return all_trades
+                all_potential_trades.extend(trades)
+
+        all_potential_trades.sort(key=lambda x: x['buy_date'])
+
+        current_capital = self.initial_capital
+        active_trades: list[TradeResultDict] = []
+        executed_trades: list[TradeResultDict] = []
+
+        for trade in all_potential_trades:
+            trade_date = trade['buy_date']
+
+            # A. Geschlossene Positionen abrechnen
+            # Prüfen, ob offene Positionen am heutigen trade_date bereits verkauft wurden
+            still_active = []
+            for active in active_trades:
+                # Wenn das Verkaufsdatum in der Vergangenheit oder am selben Tag (morgens/abends) liegt:
+                if active['sell_date'] <= trade_date:
+                    # Kapital wird freigegeben (Initiales Investment + erwirtschafteter Profit)
+                    current_capital += (active['invested_capital'] + active['profit_abs'])
+                else:
+                    still_active.append(active)
+            active_trades = still_active  # Nur noch die laufenden Trades behalten
+
+            # B. Prüfen, ob neues Signal angenommen wird (Positions-Limit)
+            if len(active_trades) < params['max_positions']:
+                # C. Positionsgröße berechnen (Compounding)
+                # Anteil vom momentan verfügbaren Kapital
+                allocation = current_capital * (params['allocation_pct'] / 100)
+
+                # Trade mit echten Geldwerten aktualisieren
+                actual_profit = allocation * (trade['profit_pct'] / 100)
+
+                trade['invested_capital'] = round(allocation, 2)
+                trade['profit_abs'] = round(actual_profit, 2)
+
+                # D. Kapital für diesen Trade blockieren
+                current_capital -= allocation
+
+                active_trades.append(trade)
+                executed_trades.append(trade)
+
+        return executed_trades
 
     def get_cached_ticker_data(self) -> dict[str, pd.DataFrame]:
         return self._ticker_cache
@@ -85,7 +125,7 @@ class MeanReversionStrategy:
             ticker,
             start_date=self.start_date,
             end_date=self.end_date,
-            is_optimized=False
+            is_optimized=True
         )
 
         # if data is not None and not data.empty:
@@ -100,6 +140,7 @@ class MeanReversionStrategy:
             hold_days: int,
             take_profit_pct: float,
             fee_rate: float,
+            stop_loss_pct: float
     ) -> list[TradeResultDict]:
         """
         Führt den Backtest für einen Ticker mit den mitgelieferten Parametern durch
@@ -110,6 +151,7 @@ class MeanReversionStrategy:
         :param hold_days: Wie viele Tage die Position gehalten wird
         :param take_profit_pct: Profit-Ziel, wenn diese erreicht wird, wird die Position verkauft
         :param fee_rate: Gebühren die pro Transaktion (Verkauf und Kauf) anfallen
+        :param stop_loss_pct: Kursfall, ab dem wieder verkauft wird, um Verluste zu minimieren
         :return: Eine Liste aller ausgeführten Transkationen
         """
         ticker_df = self._get_ticker_data_for_backtest(ticker)
@@ -127,6 +169,7 @@ class MeanReversionStrategy:
 
         open_prices = ticker_df['open'].to_numpy()
         high_prices = ticker_df['high'].to_numpy()
+        low_prices = ticker_df['low'].to_numpy()
         close_prices = ticker_df['open'].to_numpy()
         dates = ticker_df.index
 
@@ -144,6 +187,7 @@ class MeanReversionStrategy:
             raw_exit_price = 0.0
             effective_entry_price = raw_entry_price * (1 + fee_rate)
             target_price = raw_entry_price * (1 + take_profit_pct / 100)
+            stop_price = raw_entry_price * (1 - stop_loss_pct / 100)
             exit_reason = ""
             days_held = 0
 
@@ -157,13 +201,24 @@ class MeanReversionStrategy:
 
                 current_high = high_prices[current_idx]
                 current_open = open_prices[current_idx]
+                current_low = low_prices[current_idx]
                 current_close = close_prices[current_idx]
                 current_date = dates[current_idx]
 
                 # Take-Profit Logik
                 can_sell_at_open = (i > 0)
+                # Stop-Loss Logik
+                if current_low <= stop_price:
+                    # Wenn Eröffnung schon unter Stop, dann zur Eröffnung raus
+                    if i > 0 and current_open < stop_price:
+                        raw_exit_price = current_open
+                    else:
+                        raw_exit_price = stop_price
 
-                if current_high >= target_price:
+                    exit_reason = "Stop Loss"
+                    days_held = i
+                    found_exit = True
+                elif current_high >= target_price:
                     if can_sell_at_open and current_open > target_price:
                         raw_exit_price = current_open
                     else:
@@ -199,7 +254,8 @@ class MeanReversionStrategy:
                             entry_price=round(raw_entry_price, 2),
                             exit_price=round(raw_exit_price, 2),
                             profit_pct=round(profit_pct * 100, 2),
-                            profit_abs=round(profit_abs, 2)
+                            profit_abs=0.0,
+                            invested_capital=0.0
                         )
                     )
                     break
@@ -211,6 +267,9 @@ def optimize_grid_search(
         drop_options: list[int],
         hold_options: list[int],
         take_profit_options: list[float],
+        stop_loss_options: list[float],
+        max_positions_options: list[int],
+        allocation_options: list[float],
         initial_capital: int = DEFAULT_INITIAL_CAPITAL,
         start: datetime = DEFAULT_START,
         end: datetime = DEFAULT_END
@@ -219,6 +278,9 @@ def optimize_grid_search(
     Führt eine Grid-Search zur Optimierung der Mean-Reversion-Strategie
     über die angegebenen Ticker und Parameterbereiche durch.
 
+    :param allocation_options:
+    :param max_positions_options:
+    :param stop_loss_options:
     :param tickers: Liste von Ticker-Symbolen, z.B., ['AAPL', 'MSFT'], die getestet werden.
     :param drop_options: Liste von Schwellenwerten (in Prozent) für den prozentualen Rückgang, der ein Kaufsignal auslöst.
     :param hold_options: Liste von Halteperioden in Tagen (Anzahl Tage, die eine Position maximal gehalten wird).
@@ -228,7 +290,7 @@ def optimize_grid_search(
     :param end: Enddatum des Backtests.
     :return: Die beste Kombination (höchster ROI), der angegebenen Parameter
     """
-    bot = MeanReversionStrategy(initial_capital=initial_capital, start_date=start, end_date=end)
+    bot = MeanReversionWithMoneyManagement(initial_capital=initial_capital, start_date=start, end_date=end)
 
     best_roi = float('-inf')
     best_result = None
@@ -238,44 +300,43 @@ def optimize_grid_search(
     for drop in drop_options:
         for hold in hold_options:
             for tp in take_profit_options:
-                current_params = ParameterCombinationDict(
-                    drop_threshold=drop,
-                    lookback_days=DEFAULT_LOOKBACK_DAYS,
-                    hold_days=hold,
-                    take_profit_pct=tp,
-                    fee_pct=DEFAULT_FEE_RATE
-                )
-                trades = bot.run_portfolio(tickers, current_params)
+                for sl in stop_loss_options:
+                    for max_pos in max_positions_options:
+                        for alloc in allocation_options:
 
-                if trades is None:
-                    break
+                            current_params = ParameterCombinationDict(
+                                drop_threshold=drop,
+                                lookback_days=DEFAULT_LOOKBACK_DAYS,
+                                hold_days=hold,
+                                take_profit_pct=tp,
+                                stop_loss_pct=sl,
+                                max_positions=max_pos,
+                                allocation_pct=alloc,
+                                fee_pct=DEFAULT_FEE_RATE
+                            )
+                            trades = bot.run_portfolio(tickers, current_params)
 
-                if trades:
-                    current_trades_df = pd.DataFrame(trades)
-                    current_profit = current_trades_df['profit_abs'].sum()
-                    current_roi = (current_profit / initial_capital) * 100
-                    current_win_rate = len(current_trades_df[current_trades_df['profit_abs'] > 0]) / len(
-                        current_trades_df) * 100
-                else:
-                    current_profit = 0
-                    current_roi = 0
-                    current_win_rate = 0
+                            if trades:
+                                current_trades_df = pd.DataFrame(trades)
+                                current_profit = current_trades_df['profit_abs'].sum()
+                                current_roi = (current_profit / initial_capital) * 100
+                                current_win_rate = len(current_trades_df[current_trades_df['profit_abs'] > 0]) / len(
+                                    current_trades_df) * 100
+                            else:
+                                current_profit = 0
+                                current_roi = 0
+                                current_win_rate = 0
 
-                if current_roi > best_roi:
-                    best_roi = current_roi
-                    best_trades = trades
-                    best_params = ParameterCombinationDict(
-                        drop_threshold=drop,
-                        hold_days=hold,
-                        take_profit_pct=tp,
-                        lookback_days=DEFAULT_LOOKBACK_DAYS,
-                        fee_pct=DEFAULT_FEE_RATE
-                    )
-                    best_result = BestResultDict(
-                        profit=current_profit,
-                        win_rate=current_win_rate,
-                        total_number_of_trades=len(trades)
-                    )
+                            if current_roi > best_roi:
+                                best_roi = current_roi
+                                best_trades = trades
+                                best_params = current_params
+
+                                best_result = BestResultDict(
+                                    profit=current_profit,
+                                    win_rate=current_win_rate,
+                                    total_number_of_trades=len(trades)
+                                )
 
     if best_params is None or best_result is None or best_trades is None:
         return None
@@ -286,6 +347,9 @@ def optimize_grid_search(
         best_drop_threshold=best_params['drop_threshold'],
         best_hold_days=best_params['hold_days'],
         best_take_profit_pct=best_params['take_profit_pct'],
+        best_stop_loss_pct=best_params['stop_loss_pct'],
+        best_max_positions=best_params['max_positions'],
+        best_allocation_pct=best_params['allocation_pct'],
         total_profit=round(best_result['profit'], 2),
         roi_pct=round(best_roi, 2),
         win_rate=round(best_result['win_rate'], 2),
@@ -294,17 +358,19 @@ def optimize_grid_search(
         trades=best_trades
     )
 
-
 def main():
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     # tickers = ["AAPL", "MSFT", "DBK", "TSLA", "NVDA", "CRM"]
-    tickers = ["MSFT"]
+    tickers = ["MSFT", "AAPL"] # Für den ersten Test am besten nur einen oder zwei Ticker nutzen!
 
     result = optimize_grid_search(
         tickers=tickers,
         drop_options=[3, 4, 5, 6, 7],
         hold_options=[2, 3, 4, 5, 6],
         take_profit_options=[1.5, 2.0, 2.5, 3.0],
+        stop_loss_options=[2.0, 3.0, 4.0, 5.0, 10.0, 15.0],
+        max_positions_options=[1, 2, 3, 4, 5],
+        allocation_options=[5.0, 10.0, 20.0, 30.0, 50.0],
         initial_capital=DEFAULT_INITIAL_CAPITAL,
         start=datetime(2014, 1, 1),
         end=datetime(2024, 12, 31)
@@ -316,9 +382,11 @@ def main():
 
     logger.info("\n=== BESTE KONFIGURATION ===")
     logger.info(f"Drop Threshold:   {result['best_drop_threshold']}%")
-    logger.info(f"Hold Days:        {result['best_hold_days']}%")
+    logger.info(f"Hold Days:        {result['best_hold_days']} Tage")
     logger.info(f"Take Profit:      {result['best_take_profit_pct']}%")
-    logger.info(f"Stop Loss:        keins")
+    logger.info(f"Stop Loss:        {result['best_stop_loss_pct']}%") # NEU
+    logger.info(f"Max Positions:    {result['best_max_positions']}")  # NEU
+    logger.info(f"Capital Alloc:    {result['best_allocation_pct']}% pro Trade") # NEU
 
     logger.info("\n=== PERFORMANCE ===")
     logger.info(f"ROI:              {result['roi_pct']}%")
@@ -326,16 +394,6 @@ def main():
     logger.info(f"Win Rate:         {result['win_rate']}%")
     logger.info(f"Total Trades:     {result['total_number_of_trades']}")
     logger.info(f"Search Type:      grid search")
-
-    """print("\n=== ERSTE 5 TRADES ===")
-    for trade in result["trades"][:5]:
-        pprint(trade)
-
-    print("\n=== ERSTE 5 EQUITY-PUNKTE ===")
-    for point in result["equity_curve_data"][:5]:
-        pprint(point)
-    """
-
 
 if __name__ == "__main__":
     main()

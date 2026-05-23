@@ -8,6 +8,9 @@ class BestParameterCombinationDict(TypedDict):
     best_drop_threshold: int
     best_hold_days: int
     best_take_profit_pct: float
+    best_stop_loss_pct: float
+    best_max_positions: int
+    best_allocation_pct: float
     total_profit: float
     roi_pct: float
     win_rate: float
@@ -22,6 +25,9 @@ class ParameterCombinationDict(TypedDict):
     hold_days: int
     take_profit_pct: float
     fee_pct: float
+    stop_loss_pct: float
+    max_positions: int
+    allocation_pct: float
 
 
 class BestResultDict(TypedDict):
