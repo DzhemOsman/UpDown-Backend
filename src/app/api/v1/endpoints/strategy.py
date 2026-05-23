@@ -3,9 +3,9 @@ from datetime import datetime
 import pandas as pd
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.best_strategy_response import BestStrategyResponse
-from app.schemas.optimization_request import OptimizationRequest
-from app.services import market_data, unoptimized_mean_reversion, optimized_mean_reversion
+from app.schemas.api.best_strategy_response import BestStrategyResponse
+from app.schemas.api.optimization_request import OptimizationRequest
+from app.services import market_data, optimized_mean_reversion
 
 router = APIRouter()
 

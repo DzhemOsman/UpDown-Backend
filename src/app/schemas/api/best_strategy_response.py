@@ -1,5 +1,7 @@
 from pydantic import BaseModel
-from app.schemas.trade_result import TradeResult
+
+from app.schemas.api.trade_result import TradeResult
+
 
 class BestStrategyResponse(BaseModel):
     best_drop: float

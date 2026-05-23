@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.predict_request import PredictRequest
+from app.schemas.api.predict_request import PredictRequest
 from app.services.prediction import predict_features
 
 router = APIRouter()
