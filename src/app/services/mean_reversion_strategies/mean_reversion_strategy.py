@@ -209,7 +209,7 @@ class MeanReversionStrategy:
 
 
 def optimize_grid_search(
-        tickers,
+        tickers: list[str],
         drop_options: list[int],
         hold_options: list[int],
         take_profit_options: list[float],

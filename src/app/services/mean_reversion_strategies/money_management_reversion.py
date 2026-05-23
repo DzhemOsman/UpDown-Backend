@@ -53,6 +53,7 @@ class MeanReversionWithMoneyManagement:
         """
         Starte den backtest() für ein Portfolio(Eine Sammlung von Assets) und speichert alle gemachten Transaktionen
         (trades).
+        
         :param is_trend: Bool, ob Mean-Reversion mithilfe des SMA berechnet werden soll.
         :param is_kadane: Bool, ob für die Suche die minimale Abschnittssuche implementiert werden soll.
         :param tickers: Liste an Tickern, z.B., ['TSLA', 'MSFT', 'PLTR'].
@@ -154,12 +155,12 @@ class MeanReversionWithMoneyManagement:
         end_sum = 0.0
         for r in returns_array:
             # Addiere die heutige Rendite zur bisherigen Summe
-            s = end_sum + r
+            sum = end_sum + r
 
             # Invertierte Logik:
             # Wenn die Summe positiv wird, haben wir keinen durchgehenden Abwärtstrend mehr,
             # also setzen wir den Zähler auf 0 zurück. Bei Verlusten behalten wir die Summe (s).
-            end_sum = s if s < 0 else 0.0
+            end_sum = sum if sum < 0 else 0.0
 
             # Merken des bisher tiefsten Sturzes
             if end_sum < total_min:
@@ -329,7 +330,7 @@ class MeanReversionWithMoneyManagement:
 
 
 def optimize_money_management_with_grid_search(
-        tickers,
+        tickers: list[str],
         drop_options: list[int],
         hold_options: list[int],
         take_profit_options: list[float],
@@ -476,8 +477,7 @@ def objective(
     if not trades:
         return 0.0
 
-    current_trades_df = pd.DataFrame(trades)
-    current_profit = current_trades_df['profit_abs'].sum()
+    current_profit = sum(trade['profit_abs'] for trade in trades)
     current_roi = (current_profit / initial_capital) * 100
 
     return current_roi
@@ -515,7 +515,14 @@ def optimize_bayesian(
     # 2. Optimierung starten. Wir übergeben die objective-Funktion mit einer lambda-Funktion,
     # damit wir unsere zusätzlichen Argumente (tickers, bot, etc.) mitgeben können.
     logger.info(f"Starte Bayesian Optimization mit {n_trials} Trials...")
-    study.optimize(lambda trial: objective(trial, tickers, initial_capital, bot), n_trials=n_trials)
+    study.optimize(lambda trial: objective(
+        trial,
+        tickers,
+        initial_capital,
+        is_kadane,
+        is_trend,
+        bot
+    ), n_trials=n_trials)
 
     # 3. Beste Parameter auswerten
     best_params_optuna = study.best_params
