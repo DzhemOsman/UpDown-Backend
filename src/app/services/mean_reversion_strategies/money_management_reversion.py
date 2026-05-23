@@ -45,14 +45,16 @@ class MeanReversionWithMoneyManagement:
     def run_portfolio_with_money_management(
             self,
             tickers: list[str],
-            params: ParameterCombinationDict
+            params: ParameterCombinationDict,
+            is_kadane: bool = False
     ) -> list[TradeResultDict]:
         """
         Starte den backtest() für ein Portfolio(Eine Sammlung von Assets) und speichert alle gemachten Transaktionen
         (trades).
-        :param tickers: Liste an Tickern, z.B., ['TSLA', 'MSFT', 'PLTR']
-        :param params: Parameter mit denen der Backtest durchgeführt wir
-        :return: Eine Liste aller Transaktionen
+        :param is_kadane: Bool, ob für die Suche die minimale Abschnittssuche implementiert werden soll.
+        :param tickers: Liste an Tickern, z.B., ['TSLA', 'MSFT', 'PLTR'].
+        :param params: Parameter mit denen der Backtest durchgeführt wir.
+        :return: Eine Liste aller Transaktionen.
         """
         all_potential_trades = []
 
@@ -64,7 +66,8 @@ class MeanReversionWithMoneyManagement:
                 hold_days=params['hold_days'],
                 take_profit_pct=params['take_profit_pct'],
                 fee_rate=params['fee_pct'],
-                stop_loss_pct=params['stop_loss_pct']
+                stop_loss_pct=params['stop_loss_pct'],
+                is_kadane=is_kadane
             )
             if trades:
                 all_potential_trades.extend(trades)
@@ -135,6 +138,31 @@ class MeanReversionWithMoneyManagement:
 
         return data
 
+    def _calculate_max_loss_kadane(self, returns_array: np.ndarray) -> float:
+       """
+       Invertierter Kadane-Algorithmus: Sucht den stärksten zusammenhängenden Kursverlust
+        innerhalb eines Arrays von Tagesrenditen.
+
+       :param returns_array:
+       :return:
+       """
+       total_min = 0.0
+       end_sum = 0.0
+       for r in returns_array:
+           # Addiere die heutige Rendite zur bisherigen Summe
+           s = end_sum + r
+
+           # Invertierte Logik:
+           # Wenn die Summe positiv wird, haben wir keinen durchgehenden Abwärtstrend mehr,
+           # also setzen wir den Zähler auf 0 zurück. Bei Verlusten behalten wir die Summe (s).
+           end_sum = s if s < 0 else 0.0
+
+           # Merken des bisher tiefsten Sturzes
+           if end_sum < total_min:
+               total_min = end_sum
+
+       return total_min
+
     def _backtest_with_money_management(
             self, ticker: str,
             drop_threshold_pct: int,
@@ -142,11 +170,13 @@ class MeanReversionWithMoneyManagement:
             hold_days: int,
             take_profit_pct: float,
             fee_rate: float,
-            stop_loss_pct: float
+            stop_loss_pct: float,
+            is_kadane: bool = False
     ) -> list[TradeResultDict]:
         """
         Führt den Backtest für einen Ticker mit den mitgelieferten Parametern durch
 
+        :param is_kadane: Bool, ob für die Suche die minimale Abschnittssuche implementiert werden soll
         :param ticker: Ticker-Symbol, z.B., 'AAPL' der getestet wird.
         :param drop_threshold_pct: Prozentualer-Fall über die lookback Periode das ein Signal markiert.
         :param lookback_days: Anzahl an Tagen über die Preisveränderungen berechnet werden.
@@ -160,11 +190,24 @@ class MeanReversionWithMoneyManagement:
         if ticker_df is None or ticker_df.empty:
             return []
 
-        ticker_df['change'] = ticker_df['close'].pct_change(periods=lookback_days)
-
         threshold_decimal = -(drop_threshold_pct / 100)
 
-        signal_indices = np.where(ticker_df['change'] < threshold_decimal)[0]
+        if is_kadane:
+            # 1. Tägliche prozentuale Veränderung berechnen (Tag zu Tag)
+            ticker_df['daily_return'] = ticker_df['close'].pct_change(periods=1)
+
+            # 2. Den Kadane-Algorithmus als rollierendes Fenster anwenden.
+            ticker_df['kadane_max_loss'] = ticker_df['daily_return'].rolling(window=lookback_days).apply(
+                self._calculate_max_loss_kadane, raw=True
+            )
+
+            # 3. Signale generieren
+            signal_indices = np.where(ticker_df['kadane_max_loss'] < threshold_decimal)[0]
+
+        else:
+            # --- ALTE POINT-TO-POINT LOGIK ---
+            ticker_df['change'] = ticker_df['close'].pct_change(periods=lookback_days)
+            signal_indices = np.where(ticker_df['change'] < threshold_decimal)[0]
 
         trades = []
         last_exit_index = -1
@@ -274,7 +317,8 @@ def optimize_money_management_with_grid_search(
         allocation_options: list[float],
         initial_capital: int = DEFAULT_INITIAL_CAPITAL,
         start: datetime = DEFAULT_START,
-        end: datetime = DEFAULT_END
+        end: datetime = DEFAULT_END,
+        is_kadane: bool = False
 ) -> BestParameterCombinationDict | None:
     """
     Führt eine Grid-Search zur Optimierung der Mean-Reversion-Strategie
@@ -313,7 +357,7 @@ def optimize_money_management_with_grid_search(
             allocation_pct=alloc,
             fee_pct=DEFAULT_FEE_RATE
         )
-        trades = bot.run_portfolio_with_money_management(tickers, current_params)
+        trades = bot.run_portfolio_with_money_management(tickers, current_params, is_kadane)
 
         if trades:
             current_trades_df = pd.DataFrame(trades)
@@ -409,7 +453,8 @@ def optimize_bayesian(
         n_trials: int = 50,
         initial_capital: int = DEFAULT_INITIAL_CAPITAL,
         start: datetime = DEFAULT_START,
-        end: datetime = DEFAULT_END
+        end: datetime = DEFAULT_END,
+        is_kadane: bool = False
 ) -> BestParameterCombinationDict | None:
     """
     Führt eine Bayesianische Optimierung mit Optuna durch.
@@ -446,7 +491,7 @@ def optimize_bayesian(
         fee_pct=DEFAULT_FEE_RATE
     )
 
-    best_trades = bot.run_portfolio_with_money_management(tickers, final_params)
+    best_trades = bot.run_portfolio_with_money_management(tickers, final_params, is_kadane)
 
     if not best_trades:
         return None
