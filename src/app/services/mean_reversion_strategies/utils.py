@@ -133,6 +133,14 @@ def test_money_management_with_bayesian(tickers: list[str]):
     logger.info(f"Total Trades:     {result['total_number_of_trades']}")
     logger.info(f"Search Type:      grid search")
 
+    logger.info("\n=== ERSTE 10 TRADES ===")
+    for trade in result["trades"][:10]:
+        logger.info(trade)
+
+    logger.info("\n=== ERSTE 10 EQUITY-PUNKTE ===")
+    for point in result["equity_curve_data"][:10]:
+        logger.info(point)
+
 def test_money_management_with_grid_search(tickers: list[str]):
     result = optimize_money_management_with_grid_search(
         tickers=tickers,
@@ -166,6 +174,14 @@ def test_money_management_with_grid_search(tickers: list[str]):
     logger.info(f"Total Trades:     {result['total_number_of_trades']}")
     logger.info(f"Search Type:      grid search")
 
+    logger.info("\n=== ERSTE 5 TRADES ===")
+    for trade in result["trades"][:5]:
+        logger.info(trade)
+
+    logger.info("\n=== ERSTE 5 EQUITY-PUNKTE ===")
+    for point in result["equity_curve_data"][:5]:
+        logger.info(point)
+
 def test_old_mean_reversion():
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     # tickers = ["AAPL", "MSFT", "DBK", "TSLA", "NVDA", "CRM"]
@@ -198,14 +214,14 @@ def test_old_mean_reversion():
     logger.info(f"Total Trades:     {result['total_number_of_trades']}")
     logger.info(f"Search Type:      grid search")
 
-    """print("\n=== ERSTE 5 TRADES ===")
+    logger.info("\n=== ERSTE 5 TRADES ===")
     for trade in result["trades"][:5]:
-        pprint(trade)
+        logger.info(trade)
 
-    print("\n=== ERSTE 5 EQUITY-PUNKTE ===")
+    logger.info("\n=== ERSTE 10 EQUITY-PUNKTE ===")
     for point in result["equity_curve_data"][:5]:
-        pprint(point)
-    """
+        logger.info(point)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
