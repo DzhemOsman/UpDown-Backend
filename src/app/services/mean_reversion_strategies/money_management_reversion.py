@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 
 import numpy as np
+import optuna
 import pandas as pd
 
 from app.schemas.internal.best_parameter_combination_dict import (
@@ -40,7 +41,7 @@ class MeanReversionWithMoneyManagement:
         self.end_date = end_date
         self._ticker_cache: dict[str, pd.DataFrame] = {}
 
-    def run_portfolio(
+    def run_portfolio_with_money_management(
             self,
             tickers: list[str],
             params: ParameterCombinationDict
@@ -55,7 +56,7 @@ class MeanReversionWithMoneyManagement:
         all_potential_trades = []
 
         for ticker in tickers:
-            trades = self._backtest(
+            trades = self._backtest_with_money_management(
                 ticker,
                 drop_threshold_pct=params['drop_threshold'],
                 lookback_days=params['lookback_days'],
@@ -133,7 +134,7 @@ class MeanReversionWithMoneyManagement:
 
         return data
 
-    def _backtest(
+    def _backtest_with_money_management(
             self, ticker: str,
             drop_threshold_pct: int,
             lookback_days: int,
@@ -145,13 +146,13 @@ class MeanReversionWithMoneyManagement:
         """
         Führt den Backtest für einen Ticker mit den mitgelieferten Parametern durch
 
-        :param ticker: Ticker-Symbol, z.B., 'AAPL' der getestet wird
-        :param drop_threshold_pct: Prozentualer-Fall über die lookback Periode das ein Signal markiert
-        :param lookback_days: Anzahl an Tagen über die Preisveränderungen berechnet werden
-        :param hold_days: Wie viele Tage die Position gehalten wird
-        :param take_profit_pct: Profit-Ziel, wenn diese erreicht wird, wird die Position verkauft
-        :param fee_rate: Gebühren die pro Transaktion (Verkauf und Kauf) anfallen
-        :param stop_loss_pct: Kursfall, ab dem wieder verkauft wird, um Verluste zu minimieren
+        :param ticker: Ticker-Symbol, z.B., 'AAPL' der getestet wird.
+        :param drop_threshold_pct: Prozentualer-Fall über die lookback Periode das ein Signal markiert.
+        :param lookback_days: Anzahl an Tagen über die Preisveränderungen berechnet werden.
+        :param hold_days: Wie viele Tage die Position gehalten wird.
+        :param take_profit_pct: Profit-Ziel, wenn diese erreicht wird, wird die Position verkauft.
+        :param fee_rate: Gebühren die pro Transaktion (Verkauf und Kauf) anfallen.
+        :param stop_loss_pct: Kursfall, ab dem wieder verkauft wird, um Verluste zu minimieren.
         :return: Eine Liste aller ausgeführten Transkationen
         """
         ticker_df = self._get_ticker_data_for_backtest(ticker)
@@ -262,7 +263,7 @@ class MeanReversionWithMoneyManagement:
 
         return trades
 
-def optimize_grid_search(
+def optimize_money_management_with_grid_search(
         tickers,
         drop_options: list[int],
         hold_options: list[int],
@@ -314,7 +315,7 @@ def optimize_grid_search(
                                 allocation_pct=alloc,
                                 fee_pct=DEFAULT_FEE_RATE
                             )
-                            trades = bot.run_portfolio(tickers, current_params)
+                            trades = bot.run_portfolio_with_money_management(tickers, current_params)
 
                             if trades:
                                 current_trades_df = pd.DataFrame(trades)
@@ -358,42 +359,117 @@ def optimize_grid_search(
         trades=best_trades
     )
 
-def main():
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    # tickers = ["AAPL", "MSFT", "DBK", "TSLA", "NVDA", "CRM"]
-    tickers = ["MSFT", "AAPL"] # Für den ersten Test am besten nur einen oder zwei Ticker nutzen!
 
-    result = optimize_grid_search(
-        tickers=tickers,
-        drop_options=[3, 4, 5, 6, 7],
-        hold_options=[2, 3, 4, 5, 6],
-        take_profit_options=[1.5, 2.0, 2.5, 3.0],
-        stop_loss_options=[2.0, 3.0, 4.0, 5.0, 10.0, 15.0],
-        max_positions_options=[1, 2, 3, 4, 5],
-        allocation_options=[5.0, 10.0, 20.0, 30.0, 50.0],
-        initial_capital=DEFAULT_INITIAL_CAPITAL,
-        start=datetime(2014, 1, 1),
-        end=datetime(2024, 12, 31)
+def objective(
+        trial: optuna.Trial,
+        tickers: list[str],
+        initial_capital: int,
+        bot: MeanReversionWithMoneyManagement
+) -> float:
+    """
+    Die Objective-Funktion für Optuna. Sie definiert die Suchräume und gibt den ROI zurück,
+    den Optuna maximieren soll.
+    """
+    # 1. Optuna schlägt Parameter vor (Suchräume definieren)
+    drop = trial.suggest_int('drop_threshold', 3, 10)
+    hold = trial.suggest_int('hold_days', 2, 10)
+
+    # Für Floats definieren wir Ober- und Untergrenze. step bestimmt die Schrittweite.
+    tp = trial.suggest_float('take_profit_pct', 1.0, 5.0, step=0.5)
+    sl = trial.suggest_float('stop_loss_pct', 1.0, 10.0, step=0.5)
+
+    max_pos = trial.suggest_int('max_positions', 1, 5)
+    alloc = trial.suggest_float('allocation_pct', 10.0, 50.0, step=5.0)
+
+    current_params = ParameterCombinationDict(
+        drop_threshold=drop,
+        lookback_days=DEFAULT_LOOKBACK_DAYS,
+        hold_days=hold,
+        take_profit_pct=tp,
+        stop_loss_pct=sl,
+        max_positions=max_pos,
+        allocation_pct=alloc,
+        fee_pct=DEFAULT_FEE_RATE
     )
 
-    if result is None:
-        logger.warning("Keine gültige Konfiguration gefunden.")
-        return
+    # 2. Backtest durchführen
+    trades = bot.run_portfolio_with_money_management(tickers, current_params)
 
-    logger.info("\n=== BESTE KONFIGURATION ===")
-    logger.info(f"Drop Threshold:   {result['best_drop_threshold']}%")
-    logger.info(f"Hold Days:        {result['best_hold_days']} Tage")
-    logger.info(f"Take Profit:      {result['best_take_profit_pct']}%")
-    logger.info(f"Stop Loss:        {result['best_stop_loss_pct']}%") # NEU
-    logger.info(f"Max Positions:    {result['best_max_positions']}")  # NEU
-    logger.info(f"Capital Alloc:    {result['best_allocation_pct']}% pro Trade") # NEU
+    # 3. ROI berechnen (das ist der Wert, den Optuna maximieren soll)
+    if not trades:
+        return 0.0
 
-    logger.info("\n=== PERFORMANCE ===")
-    logger.info(f"ROI:              {result['roi_pct']}%")
-    logger.info(f"Total Profit:     {result['total_profit']}")
-    logger.info(f"Win Rate:         {result['win_rate']}%")
-    logger.info(f"Total Trades:     {result['total_number_of_trades']}")
-    logger.info(f"Search Type:      grid search")
+    current_trades_df = pd.DataFrame(trades)
+    current_profit = current_trades_df['profit_abs'].sum()
+    current_roi = (current_profit / initial_capital) * 100
 
-if __name__ == "__main__":
-    main()
+    return current_roi
+
+
+def optimize_bayesian(
+        tickers: list[str],
+        n_trials: int = 50,
+        initial_capital: int = DEFAULT_INITIAL_CAPITAL,
+        start: datetime = DEFAULT_START,
+        end: datetime = DEFAULT_END
+) -> BestParameterCombinationDict | None:
+    """
+    Führt eine Bayesianische Optimierung mit Optuna durch.
+    """
+    bot = MeanReversionWithMoneyManagement(initial_capital=initial_capital, start_date=start, end_date=end)
+
+    # Optuna so konfigurieren, dass es weniger Logs in die Konsole spuckt
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    # 1. Study erstellen (direction='maximize' bedeutet, wir wollen den höchsten ROI)
+    study = optuna.create_study(direction='maximize')
+
+    # 2. Optimierung starten. Wir übergeben die objective-Funktion mit einer lambda-Funktion,
+    # damit wir unsere zusätzlichen Argumente (tickers, bot, etc.) mitgeben können.
+    logger.info(f"Starte Bayesian Optimization mit {n_trials} Trials...")
+    study.optimize(lambda trial: objective(trial, tickers, initial_capital, bot), n_trials=n_trials)
+
+    # 3. Beste Parameter auswerten
+    best_params_optuna = study.best_params
+    best_roi = study.best_value
+
+    if best_roi == 0.0:
+        return None
+
+    # 4. Den besten Durchlauf noch EINMAL simulieren, um alle Trade-Daten und Equity-Kurven zu bekommen
+    final_params = ParameterCombinationDict(
+        drop_threshold=best_params_optuna['drop_threshold'],
+        lookback_days=DEFAULT_LOOKBACK_DAYS,
+        hold_days=best_params_optuna['hold_days'],
+        take_profit_pct=best_params_optuna['take_profit_pct'],
+        stop_loss_pct=best_params_optuna['stop_loss_pct'],
+        max_positions=best_params_optuna['max_positions'],
+        allocation_pct=best_params_optuna['allocation_pct'],
+        fee_pct=DEFAULT_FEE_RATE
+    )
+
+    best_trades = bot.run_portfolio_with_money_management(tickers, final_params)
+
+    if not best_trades:
+        return None
+
+    best_trades_df = pd.DataFrame(best_trades)
+    current_profit = best_trades_df['profit_abs'].sum()
+    current_win_rate = len(best_trades_df[best_trades_df['profit_abs'] > 0]) / len(best_trades_df) * 100
+
+    equity_data = calculate_comparison_curves(best_trades, bot.get_cached_ticker_data(), initial_capital)
+
+    return BestParameterCombinationDict(
+        best_drop_threshold=final_params['drop_threshold'],
+        best_hold_days=final_params['hold_days'],
+        best_take_profit_pct=final_params['take_profit_pct'],
+        best_stop_loss_pct=final_params['stop_loss_pct'],
+        best_max_positions=final_params['max_positions'],
+        best_allocation_pct=final_params['allocation_pct'],
+        total_profit=round(current_profit, 2),
+        roi_pct=round(best_roi, 2),
+        win_rate=round(current_win_rate, 2),
+        total_number_of_trades=len(best_trades),
+        equity_curve_data=equity_data,
+        trades=best_trades
+    )
