@@ -45,7 +45,7 @@ def fetch_ticker_data(
             # Garantiert, dass beide Objekte Timezone-naive sind.
             earliest_available_naive = pd.to_datetime(df["time"]).min().tz_localize(None)
             start_date_naive = pd.to_datetime(start_date).tz_localize(None)
-            
+
             # Toleranz, da an Wochenenden und Feiertagen (z.B. Neujahr) keine Börsendaten existieren
             if start_date_naive < (earliest_available_naive - pd.Timedelta(days=3)):
                 needs_ingestion = True

@@ -42,12 +42,12 @@ def get_backtest_data(
         columns_to_keep = ["open", "high", "close"]
         if is_optimized:
             columns_to_keep.append("low")
-            
+
         clean_df = df[columns_to_keep].copy()
 
         # Fehlende Werte mit letztem bekannten Wert füllen und df nach Index sortieren
         clean_df = clean_df.sort_index().ffill()
-        
+
         return clean_df
     except Exception as e:
         logger.error(f"Fehler beim Aufbereiten von {ticker}: {e}", exc_info=True)

@@ -30,6 +30,7 @@ class MeanReversionStrategy:
     Ursprünglicher Mean-Reversion-Algorithmus aus dem alten Projekt. Logik ist unverändert aber Code wurde angepasst,
     um die Code-Quality zu erhöhen und die Performance zu verbessern.
     """
+
     def __init__(
             self,
             initial_capital: int = DEFAULT_INITIAL_CAPITAL,
@@ -205,6 +206,7 @@ class MeanReversionStrategy:
                     break
 
         return trades
+
 
 def optimize_grid_search(
         tickers,
