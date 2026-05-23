@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Iterable
 
@@ -15,6 +16,8 @@ from app.repositories.influx_repository import (
 # Standardwerte
 DEFAULT_START = datetime(2000, 1, 1)
 DEFAULT_END = datetime(2026, 5, 1)
+
+logger = logging.getLogger(__name__)
 
 
 def ingest_ticker(
@@ -35,10 +38,10 @@ def ingest_ticker(
     end_str = end.strftime("%Y-%m-%d")
 
     if start_str >= end_str:
-        print(f"[{ticker}] Startdatum liegt nicht vor Enddatum, nichts zu tun.")
+        logger.warning(f"[{ticker}] Startdatum liegt nicht vor Enddatum, nichts zu tun.")
         return 0
 
-    print(f"[{ticker}] Voll-Reload {start_str} bis {end_str}...")
+    logger.info(f"[{ticker}] Voll-Reload {start_str} bis {end_str}...")
 
     df = yf.download(
         ticker,
@@ -49,7 +52,7 @@ def ingest_ticker(
     )
 
     if df is None or df.empty:
-        print(f"[{ticker}] Keine Daten.")
+        logger.warning(f"[{ticker}] Keine Daten.")
         return 0
 
     if isinstance(df.columns, pd.MultiIndex):
@@ -57,22 +60,28 @@ def ingest_ticker(
 
     df = df.dropna(subset=["Open", "High", "Low", "Close", "Volume"])
 
+    # Zeitzonen-Konvertierung, InfluxDB speicherr diese mit
+    if df.index.tz is None:
+        df.index = df.index.tz_localize("UTC")
+    else:
+        df.index = df.index.tz_convert("UTC")
+
     points: list[Point] = []
-    for ts, row in df.iterrows():
-        ts_utc = ts.tz_localize("UTC") if ts.tz is None else ts.tz_convert("UTC")
+    # Erstellt eine List an Punkt mit Yahoo Finance Daten, die in die Datenbank geschrieben werden sollen
+    for row in df.itertuples(index=True):
         points.append(
             Point(MEASUREMENT)
             .tag("ticker", ticker)
-            .field("open", float(row["Open"]))
-            .field("high", float(row["High"]))
-            .field("low", float(row["Low"]))
-            .field("close", float(row["Close"]))
-            .field("volume", int(row["Volume"]))
-            .time(ts_utc.to_pydatetime(), WritePrecision.S)
+            .field("open", float(row.Open))
+            .field("high", float(row.High))
+            .field("low", float(row.Low))
+            .field("close", float(row.Close))
+            .field("volume", int(row.Volume))
+            .time(row.Index.to_pydatetime(), WritePrecision.S)
         )
 
     write_points(points)
-    print(f"[{ticker}] {len(points)} Points geschrieben.")
+    logger.info(f"[{ticker}] {len(points)} Points geschrieben.")
     return len(points)
 
 
@@ -89,6 +98,6 @@ def ingest_all(tickers: Iterable[str]) -> int:
         try:
             total += ingest_ticker(ticker)
         except Exception as exc:
-            print(f"[{ticker}] FEHLER: {exc}")
-    print(f"Fertig. Gesamt: {total} neue Points")
+            logger.error(f"[{ticker}] FEHLER beim Ingest: {exc}", exc_info=True)
+    logger.info(f"Fertig. Gesamt: {total} neue Points in InfluxDB geschrieben.")
     return total
