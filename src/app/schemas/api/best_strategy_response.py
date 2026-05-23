@@ -1,5 +1,7 @@
 from pydantic import BaseModel
-from app.schemas.trade_result import TradeResult
+
+from app.schemas.api.trade_result import TradeResult
+
 
 class BestStrategyResponse(BaseModel):
     best_drop: float
@@ -8,6 +10,7 @@ class BestStrategyResponse(BaseModel):
     total_profit: float
     roi_pct: float
     win_rate: float
+    stop_loss: float
     total_trades: int
     equity_curve_data: list[dict]
     trades: list[TradeResult]

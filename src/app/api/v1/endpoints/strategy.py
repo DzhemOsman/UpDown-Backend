@@ -3,9 +3,9 @@ from datetime import datetime
 import pandas as pd
 from fastapi import APIRouter, HTTPException
 
-from app.schemas.best_strategy_response import BestStrategyResponse
-from app.schemas.optimization_request import OptimizationRequest
-from app.services import market_data, unoptimized_mean_reversion
+from app.schemas.api.best_strategy_response import BestStrategyResponse
+from app.schemas.api.optimization_request import OptimizationRequest
+from app.services import market_data, mean_reversion_strategy
 
 router = APIRouter()
 
@@ -14,8 +14,8 @@ DEFAULT_END = datetime.now()
 
 
 @router.post("/optimize/grid-search", response_model=BestStrategyResponse)
-def get_best_strategy(request: OptimizationRequest):
-    result = unoptimized_mean_reversion.optimize_grid_search(
+def get_grid_search_strategy(request: OptimizationRequest):
+    result = mean_reversion_strategy.optimize_grid_search(
         tickers=request.tickers,
         drop_options=request.drop_options,
         hold_options=request.hold_options,
@@ -27,7 +27,6 @@ def get_best_strategy(request: OptimizationRequest):
         raise HTTPException(status_code=404, detail="Keine profitablen Trades gefunden.")
 
     return result
-
 
 @router.get("/chart/{ticker}")
 def get_chart_data(ticker: str):

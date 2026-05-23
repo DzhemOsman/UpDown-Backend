@@ -6,7 +6,8 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-MEASUREMENT = "ohlcv_daily"
+MEASUREMENT = "ohlcv_data"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -17,7 +18,7 @@ class Settings(BaseSettings):
     INFLUXDB_HOST: str
     INFLUXDB_TOKEN: str
     INFLUXDB_DATABASE: str
-    CORS_ORIGINS: list[str] = ["http://localhost:5173"]
+    CORS_ORIGINS: list[str] = ["http://localhost:8184"]
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
