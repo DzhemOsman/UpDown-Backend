@@ -8,6 +8,7 @@ import pandas as pd
 from app.schemas.internal.best_parameter_combination_dict import (
     ParameterCombinationDict
 )
+from app.schemas.internal.strategy_result_dict import StrategyResultDict
 from app.schemas.internal.trade_result_dict import TradeResultDict
 from app.services.mean_reversion_strategies.backtest_data import get_backtest_data
 from app.services.mean_reversion_strategies.mean_reversion_defaults import (
@@ -15,6 +16,7 @@ from app.services.mean_reversion_strategies.mean_reversion_defaults import (
     DEFAULT_START,
     DEFAULT_END
 )
+from app.services.mean_reversion_strategies.strategy_calculations import calculate_strategy_result
 
 
 class MeanReversionWithMoneyManagement:
@@ -37,13 +39,15 @@ class MeanReversionWithMoneyManagement:
             self,
             tickers: list[str],
             params: ParameterCombinationDict,
-            is_kadane: bool = False,
-            is_trend: bool = False
-    ) -> list[TradeResultDict]:
+            is_kadane: bool | None = False,
+            is_trend: bool | None = False,
+            is_single: bool = False
+    ) -> list[TradeResultDict] | StrategyResultDict:
         """
         Starte den backtest() für ein Portfolio(Eine Sammlung von Assets) und speichert alle gemachten Transaktionen
         (trades).
         
+        :param is_single: Bool, ob Funktion nur eine einzelne Kombination ausprobiert oder mehrere.
         :param is_trend: Bool, ob Mean-Reversion mithilfe des SMA berechnet werden soll.
         :param is_kadane: Bool, ob für die Suche die minimale Abschnittssuche implementiert werden soll.
         :param tickers: Liste an Tickern, z.B., ['TSLA', 'MSFT', 'PLTR'].
@@ -106,7 +110,11 @@ class MeanReversionWithMoneyManagement:
                 active_trades.append(trade)
                 executed_trades.append(trade)
 
-        return executed_trades
+        if is_single:
+            result = calculate_strategy_result(executed_trades, self._ticker_cache, self.initial_capital)
+            return result
+        else:
+            return executed_trades
 
     def get_cached_ticker_data(self) -> dict[str, pd.DataFrame]:
         return self._ticker_cache
@@ -160,14 +168,14 @@ class MeanReversionWithMoneyManagement:
 
     def _backtest_with_money_management(
             self, ticker: str,
-            drop_threshold_pct: int,
+            drop_threshold_pct: float,
             lookback_days: int,
             hold_days: int,
             take_profit_pct: float,
             fee_rate: float,
-            stop_loss_pct: float,
-            is_kadane: bool = False,
-            is_trend: bool = False
+            stop_loss_pct: float| None,
+            is_kadane: bool | None = False,
+            is_trend: bool | None = False
     ) -> list[TradeResultDict]:
         """
         Führt den Backtest für einen Ticker mit den mitgelieferten Parametern durch.
@@ -305,13 +313,12 @@ class MeanReversionWithMoneyManagement:
                             ticker=ticker,
                             buy_date=entry_date.strftime('%Y-%m-%d'),
                             sell_date=exit_date.strftime('%Y-%m-%d'),
-                            days_held=days_held,
+                            days_held=int(days_held),
                             exit_reason=exit_reason,
-                            entry_price=round(raw_entry_price, 2),
-                            exit_price=round(raw_exit_price, 2),
-                            profit_pct=round(profit_pct * 100, 2),
-                            profit_abs=round(profit_abs, 2),
-                            invested_capital=0.0
+                            entry_price=float(round(effective_entry_price, 2)),
+                            exit_price=float(round(effective_exit_price, 2)),
+                            profit_pct=float(round(profit_pct * 100, 2)),
+                            profit_abs=float(round(profit_abs, 2)),
                         )
                     )
                     break

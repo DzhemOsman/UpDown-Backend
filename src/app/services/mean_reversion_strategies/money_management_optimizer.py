@@ -10,7 +10,7 @@ from app.schemas.internal.best_parameter_combination_dict import (
     ParameterCombinationDict,
     BestResultDict
 )
-from app.services.mean_reversion_strategies.compare_to_buy_and_hold import calculate_comparison_curves
+from app.services.mean_reversion_strategies.strategy_calculations import calculate_comparison_curves
 from app.services.mean_reversion_strategies.mean_reversion_defaults import (
     DEFAULT_INITIAL_CAPITAL,
     DEFAULT_START,
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def optimize_money_management_with_grid_search(
         tickers: list[str],
-        drop_options: list[int],
+        drop_options: list[float],
         hold_options: list[int],
         take_profit_options: list[float],
         stop_loss_options: list[float],
@@ -107,16 +107,16 @@ def optimize_money_management_with_grid_search(
     equity_data = calculate_comparison_curves(best_trades, bot.get_cached_ticker_data(), initial_capital)
 
     return BestParameterCombinationDict(
-        best_drop_threshold=best_params['drop_threshold'],
-        best_hold_days=best_params['hold_days'],
-        best_take_profit_pct=best_params['take_profit_pct'],
-        best_stop_loss_pct=best_params['stop_loss_pct'],
-        best_max_positions=best_params['max_positions'],
-        best_allocation_pct=best_params['allocation_pct'],
-        total_profit=round(best_result['profit'], 2),
-        roi_pct=round(best_roi, 2),
-        win_rate=round(best_result['win_rate'], 2),
-        total_number_of_trades=best_result['total_number_of_trades'],
+        best_drop_threshold=float(best_params['drop_threshold']),
+        best_hold_days=int(best_params['hold_days']),
+        best_take_profit_pct=float(best_params['take_profit_pct']),
+        best_stop_loss_pct=float(best_params['stop_loss_pct']),
+        best_max_positions=int(best_params['max_positions']),
+        best_allocation_pct=float(best_params['allocation_pct']),
+        total_profit=float(round(best_result['profit'], 2)),
+        roi_pct=float(round(best_roi, 2)),
+        win_rate=float(round(best_result['win_rate'], 2)),
+        total_number_of_trades=int(best_result['total_number_of_trades']),
         equity_curve_data=equity_data,
         trades=best_trades
     )
@@ -179,7 +179,7 @@ def objective(
 
 def optimize_bayesian(
         tickers: list[str],
-        n_trials: int = 50,
+        n_trials: int = 100,
         initial_capital: int = DEFAULT_INITIAL_CAPITAL,
         start: datetime = DEFAULT_START,
         end: datetime = DEFAULT_END,
@@ -226,7 +226,7 @@ def optimize_bayesian(
         return None
 
     # 4. Den besten Durchlauf noch EINMAL simulieren, um alle Trade-Daten und Equity-Kurven zu bekommen
-    final_params = ParameterCombinationDict(
+    best_params = ParameterCombinationDict(
         drop_threshold=best_params_optuna['drop_threshold'],
         lookback_days=DEFAULT_LOOKBACK_DAYS,
         hold_days=best_params_optuna['hold_days'],
@@ -237,7 +237,7 @@ def optimize_bayesian(
         fee_pct=DEFAULT_FEE_RATE
     )
 
-    best_trades = bot.run_portfolio_with_money_management(tickers, final_params, is_kadane, is_trend)
+    best_trades = bot.run_portfolio_with_money_management(tickers, best_params, is_kadane, is_trend)
 
     if not best_trades:
         return None
@@ -250,16 +250,16 @@ def optimize_bayesian(
     equity_data = calculate_comparison_curves(best_trades, bot.get_cached_ticker_data(), initial_capital)
 
     return BestParameterCombinationDict(
-        best_drop_threshold=final_params['drop_threshold'],
-        best_hold_days=final_params['hold_days'],
-        best_take_profit_pct=final_params['take_profit_pct'],
-        best_stop_loss_pct=final_params['stop_loss_pct'],
-        best_max_positions=final_params['max_positions'],
-        best_allocation_pct=final_params['allocation_pct'],
-        total_profit=round(current_profit, 2),
-        roi_pct=round(best_roi, 2),
-        win_rate=round(current_win_rate, 2),
-        total_number_of_trades=len(best_trades),
+        best_drop_threshold=float(best_params['drop_threshold']),
+        best_hold_days=int(best_params['hold_days']),
+        best_take_profit_pct=float(best_params['take_profit_pct']),
+        best_stop_loss_pct=float(best_params['stop_loss_pct']),
+        best_max_positions=int(best_params['max_positions']),
+        best_allocation_pct=float(best_params['allocation_pct']),
+        total_profit=float(round(current_profit, 2)),
+        roi_pct=float(round(best_roi, 2)),
+        win_rate=float(round(current_win_rate, 2)),
+        total_number_of_trades=int(len(best_trades)),
         equity_curve_data=equity_data,
         trades=best_trades
     )

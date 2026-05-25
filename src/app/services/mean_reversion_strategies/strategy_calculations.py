@@ -1,7 +1,9 @@
 import pandas as pd
 
 from app.schemas.internal.chart_data_dict import ChartDataDict
+from app.schemas.internal.strategy_result_dict import StrategyResultDict
 from app.schemas.internal.trade_result_dict import TradeResultDict
+from app.services.mean_reversion_strategies.mean_reversion_defaults import DEFAULT_INITIAL_CAPITAL
 
 
 def calculate_comparison_curves(
@@ -69,9 +71,30 @@ def calculate_comparison_curves(
         chart_data.append(
             ChartDataDict(
                 date=row.Index.strftime('%Y-%m-%d'),
-                equity=round(row.strategy_equity, 2),
-                buy_and_hold=round(row.benchmark_equity, 2)
+                equity=float(round(row.strategy_equity, 2)),
+                buy_and_hold=float(round(row.benchmark_equity, 2))
             )
         )
 
     return chart_data
+
+def calculate_strategy_result(
+        trades: list[TradeResultDict],
+        ticker_data: dict[str, pd.DataFrame],
+        initial_capital: int = DEFAULT_INITIAL_CAPITAL
+) -> StrategyResultDict:
+    total_profit = sum(trade['profit_abs'] for trade in trades)
+    roi_pct = (total_profit / initial_capital) * 100
+    win_rate = (sum(1 for trade in trades if trade['profit_abs'] > 0) / len(trades)) * 100 if trades else 0
+    total_trades = len(trades)
+
+    equity_curve_data = calculate_comparison_curves(trades, ticker_data, initial_capital)
+
+    return StrategyResultDict(
+        total_profit=float(round(total_profit, 2)),
+        roi_pct=float(round(roi_pct, 2)),
+        win_rate=float(round(win_rate, 2)),
+        total_number_of_trades=int(total_trades),
+        equity_curve_data=equity_curve_data,
+        trades=trades
+    )

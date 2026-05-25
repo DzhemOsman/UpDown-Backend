@@ -9,8 +9,11 @@ import pandas as pd
 from app.schemas.internal.best_parameter_combination_dict import (
     ParameterCombinationDict
 )
+from app.schemas.internal.strategy_result_dict import StrategyResultDict
 from app.schemas.internal.trade_result_dict import TradeResultDict
 from app.services.mean_reversion_strategies.backtest_data import get_backtest_data
+from app.services.mean_reversion_strategies.strategy_calculations import calculate_comparison_curves, \
+    calculate_strategy_result
 from app.services.mean_reversion_strategies.mean_reversion_defaults import (
     DEFAULT_INITIAL_CAPITAL,
     DEFAULT_START,
@@ -40,14 +43,16 @@ class MeanReversionStrategy:
     def run_portfolio(
             self,
             tickers: list[str],
-            params: ParameterCombinationDict
-    ) -> list[TradeResultDict]:
+            params: ParameterCombinationDict,
+            is_single: bool = False,
+    ) -> list[TradeResultDict] | StrategyResultDict:
         """
         Starte den backtest() für ein Portfolio(Eine Sammlung von Assets) und speichert alle gemachten Transaktionen
         (trades).
+        :param is_single: Bool, ob Funktion nur eine einzelne Kombination ausprobiert oder mehrere.
         :param tickers: Liste an Tickern, z.B., ['TSLA', 'MSFT', 'PLTR']
         :param params: Parameter mit denen der Backtest durchgeführt wir
-        :return: Eine Liste aller Transaktionen
+        :return: Eine Liste aller Transaktionen oder bei einer einzelnen Strategie das Ergebnis
         """
         all_trades = []
 
@@ -62,7 +67,12 @@ class MeanReversionStrategy:
             )
             if trades:
                 all_trades.extend(trades)
-        return all_trades
+
+        if is_single:
+            result = calculate_strategy_result(all_trades, self._ticker_cache, self.initial_capital)
+            return result
+        else:
+            return all_trades
 
     def get_cached_ticker_data(self) -> dict[str, pd.DataFrame]:
         return self._ticker_cache
@@ -91,7 +101,7 @@ class MeanReversionStrategy:
 
     def _backtest(
             self, ticker: str,
-            drop_threshold_pct: int,
+            drop_threshold_pct: float,
             lookback_days: int,
             hold_days: int,
             take_profit_pct: float,
@@ -190,12 +200,12 @@ class MeanReversionStrategy:
                             ticker=ticker,
                             buy_date=entry_date.strftime('%Y-%m-%d'),
                             sell_date=exit_date.strftime('%Y-%m-%d'),
-                            days_held=days_held,
+                            days_held=int(days_held),
                             exit_reason=exit_reason,
-                            entry_price=round(raw_entry_price, 2),
-                            exit_price=round(raw_exit_price, 2),
-                            profit_pct=round(profit_pct * 100, 2),
-                            profit_abs=round(profit_abs, 2)
+                            entry_price=float(round(raw_entry_price, 2)),
+                            exit_price=float(round(raw_exit_price, 2)),
+                            profit_pct=float(round(profit_pct * 100, 2)),
+                            profit_abs=float(round(profit_abs, 2))
                         )
                     )
                     break

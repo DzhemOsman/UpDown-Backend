@@ -11,4 +11,3 @@ class TradeResultDict(TypedDict):
     exit_price: float
     profit_pct: float
     profit_abs: float
-    invested_capital: float
