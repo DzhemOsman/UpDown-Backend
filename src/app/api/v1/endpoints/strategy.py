@@ -5,23 +5,38 @@ from fastapi import APIRouter, HTTPException
 
 from app.schemas.api.best_strategy_response import BestStrategyResponse
 from app.schemas.api.optimization_request import OptimizationRequest
+from app.schemas.api.strategy_request import StrategyRequest
+from app.schemas.api.strategy_result import StrategyResult
+from app.schemas.internal.best_parameter_combination_dict import ParameterCombinationDict
 from app.services import market_data
-from app.services.mean_reversion_strategies import mean_reversion_strategy
+from app.services.mean_reversion_strategies.mean_reversion_defaults import DEFAULT_START, DEFAULT_END
+from app.services.mean_reversion_strategies.mean_reversion_strategy import MeanReversionStrategy
+from app.services.mean_reversion_strategies.money_management_optimizer import \
+    optimize_money_management_with_grid_search, optimize_bayesian
+from app.services.mean_reversion_strategies.money_management_reversion import MeanReversionWithMoneyManagement
+from app.services.mean_reversion_strategies.optimizer import optimize_grid_search
 
 router = APIRouter()
 
-DEFAULT_START = datetime(2000, 1, 1)
-DEFAULT_END = datetime.now()
 
-
-@router.post("/optimize/grid-search", response_model=BestStrategyResponse)
-def get_grid_search_strategy(request: OptimizationRequest):
-    result = mean_reversion_strategy.optimize_grid_search(
-        tickers=request.tickers,
-        drop_options=request.drop_options,
-        hold_options=request.hold_options,
-        take_profit_options=request.take_profit_options,
+@router.post("/mean-reversion", response_model=StrategyResult)
+def get_mean_reversion_result(request: StrategyRequest) -> StrategyResult:
+    bot = MeanReversionStrategy(
         initial_capital=request.initial_capital,
+        start_date=request.start_date,
+        end_date=request.end_date
+    )
+
+    result = bot.run_portfolio(
+        tickers=request.tickers,
+        params=ParameterCombinationDict(
+            drop_threshold=request.drop_option,
+            lookback_days=request.lookback_days,
+            hold_days=request.hold_option,
+            take_profit_pct=request.take_profit_option,
+            fee_pct=request.fee_pct
+        ),
+        is_single=True
     )
 
     if result is None:
@@ -29,29 +44,120 @@ def get_grid_search_strategy(request: OptimizationRequest):
 
     return result
 
+
+@router.post("/mean-reversion/money-management", response_model=StrategyResult)
+def get_money_management_result(request: StrategyRequest) -> StrategyResult:
+    bot = MeanReversionWithMoneyManagement(
+        initial_capital=request.initial_capital,
+        start_date=request.start_date,
+        end_date=request.end_date
+    )
+
+    result = bot.run_portfolio_with_money_management(
+        tickers=request.tickers,
+        params=ParameterCombinationDict(
+            drop_threshold=request.drop_option,
+            lookback_days=request.lookback_days,
+            hold_days=request.hold_option,
+            take_profit_pct=request.take_profit_option,
+            fee_pct=request.fee_pct,
+            stop_loss_pct=request.stop_loss,
+            max_positions=request.max_positions,
+            allocation_pct=request.allocation_pct
+        ),
+        is_kadane=request.is_kadane,
+        is_trend=request.is_trend,
+        is_single=True
+    )
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Keine profitablen Trades gefunden.")
+
+    return result
+
+
+@router.post("/optimize/grid-search", response_model=BestStrategyResponse)
+def get_optimized_grid_search_strategy(request: OptimizationRequest) -> BestStrategyResponse:
+    result = optimize_grid_search(
+        tickers=request.tickers,
+        drop_options=request.drop_options,
+        hold_options=request.hold_options,
+        take_profit_options=request.take_profit_options,
+        initial_capital=request.initial_capital,
+        start=request.start_date,
+        end=request.end_date
+    )
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Keine profitablen Trades gefunden.")
+
+    return result
+
+
+@router.post("/optimize/money-management/grid-search", response_model=BestStrategyResponse)
+def get_optimized_strategy_with_money_management_and_grid_search(request: OptimizationRequest) -> BestStrategyResponse:
+    result = optimize_money_management_with_grid_search(
+        tickers=request.tickers,
+        drop_options=request.drop_options,
+        hold_options=request.hold_options,
+        take_profit_options=request.take_profit_options,
+        stop_loss_options=request.stop_loss,
+        max_positions_options=request.max_positions,
+        allocation_options=request.allocation_pct,
+        initial_capital=request.initial_capital,
+        start=request.start_date,
+        end=request.end_date,
+        is_kadane=request.is_kadane,
+        is_trend=request.is_trend
+    )
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Keine profitablen Trades gefunden.")
+
+    return result
+
+
+@router.post("/optimize/money-management/bayesian", response_model=BestStrategyResponse)
+def get_optimized_strategy_with_money_management_and_bayesian(request: OptimizationRequest) -> BestStrategyResponse:
+    result = optimize_bayesian(
+        tickers=request.tickers,
+        n_trials=request.n_trials,
+        start=request.start_date,
+        end=request.end_date,
+        initial_capital=request.initial_capital,
+        is_kadane=request.is_kadane,
+        is_trend=request.is_trend
+    )
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Keine profitablen Trades gefunden.")
+
+    return result
+
+
 @router.get("/chart/{ticker}")
-def get_chart_data(ticker: str):
-    df = market_data.fetch_ticker_data(ticker, DEFAULT_START, DEFAULT_END)
+def get_chart_data(
+    ticker: str,
+    start_date: datetime = DEFAULT_START,
+    end_date: datetime = DEFAULT_END
+):
+    df = market_data.fetch_ticker_data(ticker, start_date, end_date)
 
     if df is None or df.empty:
         raise HTTPException(status_code=404, detail="Ticker nicht gefunden.")
 
     ts = pd.to_datetime(df["time"], utc=True).dt.tz_localize(None)
-    clean_df = pd.DataFrame(index=pd.DatetimeIndex(ts))
-    clean_df["open"] = df["open"].to_numpy()
-    clean_df["high"] = df["high"].to_numpy()
-    clean_df["low"] = df["low"].to_numpy()
-    clean_df["close"] = df["close"].to_numpy()
-    clean_df.sort_index(inplace=True)
-    clean_df = clean_df.ffill().bfill().fillna(0.0)
+    df.index = ts
+    columns_to_keep = ["open", "high", "low", "close"]
+    clean_df = df[columns_to_keep].sort_index().ffill().bfill().fillna(0.0)
 
     chart_data = []
-    for index, row in clean_df.iterrows():
+    for row in clean_df.itertuples(index=True):
         chart_data.append({
-            "date": index.strftime('%Y-%m-%d'),
-            "open": float(round(row['open'], 2)),
-            "high": float(round(row['high'], 2)),
-            "low": float(round(row['low'], 2)),
-            "close": float(round(row['close'], 2)),
+            "date": row.Index.strftime('%Y-%m-%d'),
+            "open": float(round(row.open, 2)),
+            "high": float(round(row.high, 2)),
+            "low": float(round(row.low, 2)),
+            "close": float(round(row.close, 2)),
         })
     return chart_data

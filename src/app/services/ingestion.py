@@ -12,10 +12,7 @@ from app.repositories.influx_repository import (
     MEASUREMENT,
     write_points,
 )
-
-# Standardwerte
-DEFAULT_START = datetime(2000, 1, 1)
-DEFAULT_END = datetime(2026, 5, 1)
+from app.services.mean_reversion_strategies.mean_reversion_defaults import DEFAULT_START, DEFAULT_END
 
 logger = logging.getLogger(__name__)
 
