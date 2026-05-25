@@ -8,6 +8,8 @@ from app.core.influx import get_client
 from app.schemas.api.query_request import QueryRequest
 
 
+
+
 def write_points(points: list[Point]) -> None:
     """
     Schreibt gelieferte Points in Datenbank
