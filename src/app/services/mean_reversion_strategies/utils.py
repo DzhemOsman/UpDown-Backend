@@ -3,11 +3,11 @@ import time
 from datetime import datetime
 
 from app.services.mean_reversion_strategies.mean_reversion_defaults import DEFAULT_INITIAL_CAPITAL
-from app.services.mean_reversion_strategies.mean_reversion_strategy import optimize_grid_search
-from app.services.mean_reversion_strategies.money_management_reversion import (
+from app.services.mean_reversion_strategies.money_management_optimizer import (
     optimize_money_management_with_grid_search,
     optimize_bayesian
 )
+from app.services.mean_reversion_strategies.optimizer import optimize_grid_search
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ def compare_grid_search_and_bayesian(tickers: list[str]):
 def test_money_management_with_bayesian(tickers: list[str], is_kadane: bool = False, is_trend: bool = False):
     result = optimize_bayesian(
         tickers=tickers,
-        n_trials=100,  # 100 Versuche sind oft schon extrem gut und schnell
+        n_trials=100,
         initial_capital=DEFAULT_INITIAL_CAPITAL,
         start=datetime(2014, 1, 1),
         end=datetime(2024, 12, 31),
@@ -234,6 +234,27 @@ def test_old_mean_reversion():
     for point in result["equity_curve_data"][:5]:
         logger.info(point)
 
+def find_optimal_bayesian_trials(tickers: list[str]) -> None:
+
+    trials = 50
+
+    while trials <= 1000:
+        result = optimize_bayesian(
+            tickers=tickers,
+            n_trials=trials,
+            initial_capital=DEFAULT_INITIAL_CAPITAL,
+            start=datetime(2014, 1, 1),
+            end=datetime(2024, 12, 31),
+            is_kadane=True,
+            is_trend=False
+        )
+
+        logger.info(f"ROI:              {result['roi_pct']}%")
+        logger.info(f"Trials:           {trials}")
+        logger.info("---------------------------------------------")
+        trials += 50
+
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -241,11 +262,13 @@ if __name__ == "__main__":
     # tickers = ["AAPL", "MSFT", "DBK", "TSLA", "NVDA", "CRM"]
     tickers = ["MSFT", "AAPL"]
 
-    #test_money_management_with_bayesian(tickers)
-    #test_money_management_with_bayesian(tickers, is_kadane=True)
+    # test_money_management_with_bayesian(tickers)
+    # test_money_management_with_bayesian(tickers, is_kadane=True)
 
-    test_money_management_with_grid_search(tickers)
-    test_money_management_with_grid_search(tickers, is_kadane=True)
-    test_money_management_with_grid_search(tickers, is_trend=True)
-    test_money_management_with_grid_search(tickers, is_kadane=True, is_trend=True)
+    # test_money_management_with_grid_search(tickers)
+    # test_money_management_with_grid_search(tickers, is_kadane=True)
+    # test_money_management_with_grid_search(tickers, is_trend=True)
+    # test_money_management_with_grid_search(tickers, is_kadane=True, is_trend=True)
     # compare_grid_search_and_bayesian(tickers)
+
+    find_optimal_bayesian_trials(tickers)
