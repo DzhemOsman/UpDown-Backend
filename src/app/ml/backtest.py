@@ -72,9 +72,9 @@ def run_backtest():
     current_capital = start_capital * ((1 + simulierte_jahresrendite) ** anzahl_jahre)
     total_return_pct = ((current_capital - start_capital) / start_capital) * 100
 
-    logger.info("=============================================")
+    logger.info("============================================")
     logger.info("   📈 ERGEBNIS DES KI-BACKTESTS (KORRIGIERT)  ")
-    logger.info("=============================================")
+    logger.info("============================================")
     logger.info(f"Anzahl ausgeführter Trades: {total_trades}")
     logger.info(f"Gewinnquote (Win Rate):    {win_rate:.2%}")
     logger.info(f"Ø Rendite pro Trade:       {avg_return_per_trade:.2%}")
