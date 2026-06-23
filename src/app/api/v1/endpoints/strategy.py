@@ -11,8 +11,10 @@ from app.schemas.internal.best_parameter_combination_dict import ParameterCombin
 from app.services import market_data
 from app.services.mean_reversion_strategies.mean_reversion_defaults import DEFAULT_START, DEFAULT_END
 from app.services.mean_reversion_strategies.mean_reversion_strategy import MeanReversionStrategy
-from app.services.mean_reversion_strategies.money_management_optimizer import \
-    optimize_money_management_with_grid_search, optimize_bayesian
+from app.services.mean_reversion_strategies.money_management_optimizer import (
+    optimize_money_management_with_grid_search,
+    optimize_money_management_with_randomized_grid_search
+)
 from app.services.mean_reversion_strategies.money_management_reversion import MeanReversionWithMoneyManagement
 from app.services.mean_reversion_strategies.optimizer import optimize_grid_search
 
@@ -117,16 +119,23 @@ def get_optimized_strategy_with_money_management_and_grid_search(request: Optimi
     return result
 
 
-@router.post("/optimize/money-management/bayesian", response_model=BestStrategyResponse)
-def get_optimized_strategy_with_money_management_and_bayesian(request: OptimizationRequest) -> BestStrategyResponse:
-    result = optimize_bayesian(
+@router.post("/optimize/money-management/randomized-grid-search", response_model=BestStrategyResponse)
+def get_optimized_strategy_with_money_management_and_randomized_grid_search(
+        request: OptimizationRequest) -> BestStrategyResponse:
+    result = optimize_money_management_with_randomized_grid_search(
         tickers=request.tickers,
-        n_trials=request.n_trials,
+        drop_options=request.drop_options,
+        hold_options=request.hold_options,
+        take_profit_options=request.take_profit_options,
+        stop_loss_options=request.stop_loss,
+        max_positions_options=request.max_positions,
+        allocation_options=request.allocation_pct,
+        initial_capital=request.initial_capital,
         start=request.start_date,
         end=request.end_date,
-        initial_capital=request.initial_capital,
         is_kadane=request.is_kadane,
-        is_trend=request.is_trend
+        is_trend=request.is_trend,
+        n_trials=request.n_trials
     )
 
     if result is None:
@@ -137,9 +146,9 @@ def get_optimized_strategy_with_money_management_and_bayesian(request: Optimizat
 
 @router.get("/chart/{ticker}")
 def get_chart_data(
-    ticker: str,
-    start_date: datetime = DEFAULT_START,
-    end_date: datetime = DEFAULT_END
+        ticker: str,
+        start_date: datetime = DEFAULT_START,
+        end_date: datetime = DEFAULT_END
 ):
     df = market_data.fetch_ticker_data(ticker, start_date, end_date)
 
