@@ -1,8 +1,9 @@
 import itertools
 import logging
+import random
 from datetime import datetime
+from typing import Iterable
 
-import optuna
 import pandas as pd
 
 from app.schemas.internal.best_parameter_combination_dict import (
@@ -10,7 +11,6 @@ from app.schemas.internal.best_parameter_combination_dict import (
     ParameterCombinationDict,
     BestResultDict
 )
-from app.services.mean_reversion_strategies.strategy_calculations import calculate_comparison_curves
 from app.services.mean_reversion_strategies.mean_reversion_defaults import (
     DEFAULT_INITIAL_CAPITAL,
     DEFAULT_START,
@@ -19,6 +19,7 @@ from app.services.mean_reversion_strategies.mean_reversion_defaults import (
     DEFAULT_FEE_RATE
 )
 from app.services.mean_reversion_strategies.money_management_reversion import MeanReversionWithMoneyManagement
+from app.services.mean_reversion_strategies.strategy_calculations import calculate_comparison_curves
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def optimize_money_management_with_grid_search(
         is_trend: bool = False
 ) -> BestParameterCombinationDict | None:
     """
-    Führt eine Grid-Search zur Optimierung der Mean-Reversion-Strategie
+    Führt eine Grid-Search, alle Parameterkombinationen, zur Optimierung der Mean-Reversion-Strategie
     über die angegebenen Ticker und Parameterbereiche durch.
 
     :param is_trend: Bool, ob Mean-Reversion mithilfe des SMA berechnet werden soll.
@@ -53,8 +54,71 @@ def optimize_money_management_with_grid_search(
     :param initial_capital: Startkapital zur Berechnung des absoluten Gewinns und ROI.
     :param start: Startdatum des Backtests
     :param end: Enddatum des Backtests.
-    :return: Die beste Kombination (höchster ROI), der angegebenen Parameter
+    :return: Die beste Kombination (höchster ROI), der getesteten Parameter
     """
+    # itertools.product verhindert 6-fache Schleifen-Verschachtelung (Arrow Anti-Pattern)
+    combinations = itertools.product(
+        drop_options, hold_options, take_profit_options,
+        stop_loss_options, max_positions_options, allocation_options,
+    )
+    return _find_best_combination(combinations, tickers, initial_capital, start, end, is_kadane, is_trend)
+
+
+def optimize_money_management_with_randomized_grid_search(
+        n_trials: int,
+        tickers: list[str],
+        drop_options: list[float],
+        hold_options: list[int],
+        take_profit_options: list[float],
+        stop_loss_options: list[float],
+        max_positions_options: list[int],
+        allocation_options: list[float],
+        initial_capital: int = DEFAULT_INITIAL_CAPITAL,
+        start: datetime = DEFAULT_START,
+        end: datetime = DEFAULT_END,
+        is_kadane: bool = False,
+        is_trend: bool = False,
+        seed: int | None = None,
+) -> BestParameterCombinationDict | None:
+    """
+    Führt eine Grid-Search, über n_trials zufällige Parameterkombinationen, zur Optimierung der Mean-Reversion-Strategie
+    über die angegebenen Ticker und Parameterbereiche durch.
+
+    :param n_trials: Anzahl der zufällig ausgewählten Parameterkombinationen
+    :param seed: Seed um Zufallsgenerierte Kombinationen reproduzieren zu können
+    :param tickers: Liste von Ticker-Symbolen, z.B., ['AAPL', 'MSFT'], die getestet werden.
+    :param drop_options: Liste von Schwellenwerten (in Prozent) für den prozentualen Rückgang, der ein Kaufsignal auslöst.
+    :param hold_options: Liste von Halteperioden in Tagen (Anzahl Tage, die eine Position maximal gehalten wird).
+    :param take_profit_options: Liste von Take-Profit-Zielen in Prozent (Gewinnziel zum Verkauf).
+    :param stop_loss_options: Liste von Stop-Loss-Schwellenwerten in Prozent (maximaler Verlust pro Position).
+    :param max_positions_options: Liste von maximalen gleichzeitigen Positionen im Portfolio.
+    :param allocation_options: Liste von Allokationsprozentsätzen (Anteil des verfügbaren Kapitals pro Trade).
+    :param initial_capital: Startkapital zur Berechnung des absoluten Gewinns und ROI.
+    :param start: Startdatum des Backtests
+    :param end: Enddatum des Backtests
+    :param is_kadane: Bool, ob der Kadane-Algorithmus für die Signalgenerierung verwendet werden soll.
+    :param is_trend: Bool, ob Mean-Reversion mithilfe des SMA berechnet werden soll.
+    :return: Die beste Kombination (höchster ROI), der getesteten Parameter
+    """
+    rng = random.Random(seed)
+    all_combinations = list(itertools.product(
+        drop_options, hold_options, take_profit_options,
+        stop_loss_options, max_positions_options, allocation_options
+    ))
+    sampled = rng.sample(all_combinations, min(n_trials, len(all_combinations)))
+
+    return _find_best_combination(sampled, tickers, initial_capital, start, end, is_kadane, is_trend)
+
+
+def _find_best_combination(
+        combinations: Iterable[tuple],
+        tickers: list[str],
+        initial_capital: int,
+        start: datetime,
+        end: datetime,
+        is_kadane: bool,
+        is_trend: bool,
+) -> BestParameterCombinationDict | None:
     bot = MeanReversionWithMoneyManagement(initial_capital=initial_capital, start_date=start, end_date=end)
 
     best_roi = float('-inf')
@@ -62,11 +126,8 @@ def optimize_money_management_with_grid_search(
     best_trades = None
     best_params = None
 
-    # itertools.product verhindert 6-fache Schleifen-Verschachtelung (Arrow Anti-Pattern)
-    for drop, hold, tp, sl, max_pos, alloc in itertools.product(
-            drop_options, hold_options, take_profit_options, stop_loss_options, max_positions_options,
-            allocation_options
-    ):
+    for drop, hold, tp, sl, max_pos, alloc in combinations:
+
         current_params = ParameterCombinationDict(
             drop_threshold=drop,
             lookback_days=DEFAULT_LOOKBACK_DAYS,
@@ -83,7 +144,7 @@ def optimize_money_management_with_grid_search(
             current_trades_df = pd.DataFrame(trades)
             current_profit = current_trades_df['profit_abs'].sum()
             current_roi = (current_profit / initial_capital) * 100
-            # Pandas Best Practice: Wahrheitswerte (True/False) als Mean berechnen
+            #  Pandas Best Practice: Wahrheitswerte (True/False) als Mean berechnen
             current_win_rate = (current_trades_df['profit_abs'] > 0).mean() * 100
         else:
             current_profit = 0
@@ -117,149 +178,6 @@ def optimize_money_management_with_grid_search(
         roi_pct=float(round(best_roi, 2)),
         win_rate=float(round(best_result['win_rate'], 2)),
         total_number_of_trades=int(best_result['total_number_of_trades']),
-        equity_curve_data=equity_data,
-        trades=best_trades
-    )
-
-
-def objective(
-        trial: optuna.Trial,
-        tickers: list[str],
-        initial_capital: int,
-        is_kadane: bool,
-        is_trend: bool,
-        bot: MeanReversionWithMoneyManagement
-) -> float:
-    """
-    Die Objective-Funktion für Optuna. Sie definiert die Suchräume und gibt den ROI zurück,
-    den Optuna maximieren soll.
-
-    :param trial: Optuna Trial-Objekt, das Parametervorschläge macht.
-    :param tickers: Liste von Ticker-Symbolen, z.B., ['AAPL', 'MSFT'], die getestet werden.
-    :param initial_capital: Startkapital zur Berechnung des ROI.
-    :param is_kadane: Bool, ob der Kadane-basierte Signalgenerator verwendet werden soll.
-    :param is_trend: Bool, ob Trend-basierte (SMA) Signale verwendet werden sollen.
-    :param bot: Instanz von MeanReversionWithMoneyManagement, die den Backtest ausführt.
-    :return: ROI in Prozent (float), den Optuna maximieren möchte.
-    """
-    # 1. Optuna schlägt Parameter vor (Suchräume definieren)
-    drop = trial.suggest_int('drop_threshold', 3, 10)
-    hold = trial.suggest_int('hold_days', 2, 10)
-
-    # Für Floats definieren wir Ober- und Untergrenze. step bestimmt die Schrittweite.
-    tp = trial.suggest_float('take_profit_pct', 1.0, 5.0, step=0.5)
-    sl = trial.suggest_float('stop_loss_pct', 1.0, 10.0, step=0.5)
-
-    max_pos = trial.suggest_int('max_positions', 1, 5)
-    alloc = trial.suggest_float('allocation_pct', 10.0, 50.0, step=5.0)
-
-    current_params = ParameterCombinationDict(
-        drop_threshold=drop,
-        lookback_days=DEFAULT_LOOKBACK_DAYS,
-        hold_days=hold,
-        take_profit_pct=tp,
-        stop_loss_pct=sl,
-        max_positions=max_pos,
-        allocation_pct=alloc,
-        fee_pct=DEFAULT_FEE_RATE
-    )
-
-    # 2. Backtest durchführen
-    trades = bot.run_portfolio_with_money_management(tickers, current_params, is_kadane, is_trend)
-
-    # 3. ROI berechnen (das ist der Wert, den Optuna maximieren soll)
-    if not trades:
-        return 0.0
-
-    current_profit = sum(trade['profit_abs'] for trade in trades)
-    current_roi = (current_profit / initial_capital) * 100
-
-    return current_roi
-
-
-def optimize_bayesian(
-        tickers: list[str],
-        n_trials: int = 100,
-        initial_capital: int = DEFAULT_INITIAL_CAPITAL,
-        start: datetime = DEFAULT_START,
-        end: datetime = DEFAULT_END,
-        is_kadane: bool = False,
-        is_trend: bool = False
-) -> BestParameterCombinationDict | None:
-    """
-    Führt eine Bayesianische Optimierung mit Optuna durch.
-
-    :param tickers: Liste von Ticker-Symbolen, z.B., ['AAPL', 'MSFT'], die getestet werden.
-    :param n_trials: Anzahl der Optuna‑Trials (Anzahl der Optimierungsdurchläufe).
-    :param initial_capital: Startkapital zur Berechnung von Gewinn und ROI.
-    :param start: Startdatum des Backtests.
-    :param end: Enddatum des Backtests.
-    :param is_kadane: Wenn True, wird der Kadane‑basierte Signalgenerator verwendet.
-    :param is_trend: Wenn True, werden trendbasierte Signale (SMA‑Crossover) verwendet.
-    :return: BestParameterCombinationDict mit den besten Parametern, Performance‑Metriken und Trades oder None, falls keine valide Lösung gefunden wurde.
-    """
-    bot = MeanReversionWithMoneyManagement(initial_capital=initial_capital, start_date=start, end_date=end)
-
-    # Optuna so konfigurieren, dass es weniger Logs in die Konsole spuckt
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-    # 1. Study erstellen (direction='maximize' bedeutet, wir wollen den höchsten ROI)
-    study = optuna.create_study(direction='maximize')
-
-    # 2. Optimierung starten. Wir übergeben die objective-Funktion mit einer lambda-Funktion,
-    # damit wir unsere zusätzlichen Argumente (tickers, bot, etc.) mitgeben können.
-    logger.info(f"Starte Bayesian Optimization mit {n_trials} Trials...")
-    study.optimize(lambda trial: objective(
-        trial,
-        tickers,
-        initial_capital,
-        is_kadane,
-        is_trend,
-        bot
-    ), n_trials=n_trials)
-
-    # 3. Beste Parameter auswerten
-    best_params_optuna = study.best_params
-    best_roi = study.best_value
-
-    if best_roi == 0.0:
-        return None
-
-    # 4. Den besten Durchlauf noch EINMAL simulieren, um alle Trade-Daten und Equity-Kurven zu bekommen
-    best_params = ParameterCombinationDict(
-        drop_threshold=best_params_optuna['drop_threshold'],
-        lookback_days=DEFAULT_LOOKBACK_DAYS,
-        hold_days=best_params_optuna['hold_days'],
-        take_profit_pct=best_params_optuna['take_profit_pct'],
-        stop_loss_pct=best_params_optuna['stop_loss_pct'],
-        max_positions=best_params_optuna['max_positions'],
-        allocation_pct=best_params_optuna['allocation_pct'],
-        fee_pct=DEFAULT_FEE_RATE
-    )
-
-    best_trades = bot.run_portfolio_with_money_management(tickers, best_params, is_kadane, is_trend)
-
-    if not best_trades:
-        return None
-
-    best_trades_df = pd.DataFrame(best_trades)
-    current_profit = best_trades_df['profit_abs'].sum()
-    # Pandas Best Practice für Win Rate
-    current_win_rate = (best_trades_df['profit_abs'] > 0).mean() * 100
-
-    equity_data = calculate_comparison_curves(best_trades, bot.get_cached_ticker_data(), initial_capital)
-
-    return BestParameterCombinationDict(
-        best_drop_threshold=float(best_params['drop_threshold']),
-        best_hold_days=int(best_params['hold_days']),
-        best_take_profit_pct=float(best_params['take_profit_pct']),
-        best_stop_loss_pct=float(best_params['stop_loss_pct']),
-        best_max_positions=int(best_params['max_positions']),
-        best_allocation_pct=float(best_params['allocation_pct']),
-        total_profit=float(round(current_profit, 2)),
-        roi_pct=float(round(best_roi, 2)),
-        win_rate=float(round(current_win_rate, 2)),
-        total_number_of_trades=int(len(best_trades)),
         equity_curve_data=equity_data,
         trades=best_trades
     )
