@@ -12,13 +12,12 @@ from app.schemas.internal.best_parameter_combination_dict import (
 from app.schemas.internal.strategy_result_dict import StrategyResultDict
 from app.schemas.internal.trade_result_dict import TradeResultDict
 from app.services.mean_reversion_strategies.backtest_data import get_backtest_data
-from app.services.mean_reversion_strategies.strategy_calculations import calculate_comparison_curves, \
-    calculate_strategy_result
 from app.services.mean_reversion_strategies.mean_reversion_defaults import (
     DEFAULT_INITIAL_CAPITAL,
     DEFAULT_START,
     DEFAULT_END
 )
+from app.services.mean_reversion_strategies.strategy_calculations import calculate_strategy_result
 
 logger = logging.getLogger(__name__)
 
@@ -44,18 +43,15 @@ class MeanReversionStrategy:
             self,
             tickers: list[str],
             params: ParameterCombinationDict,
-            is_single: bool = False,
-    ) -> list[TradeResultDict] | StrategyResultDict:
+    ) -> list[TradeResultDict]:
         """
-        Starte den backtest() für ein Portfolio(Eine Sammlung von Assets) und speichert alle gemachten Transaktionen
-        (trades).
-        :param is_single: Bool, ob Funktion nur eine einzelne Kombination ausprobiert oder mehrere.
-        :param tickers: Liste an Tickern, z.B., ['TSLA', 'MSFT', 'PLTR']
-        :param params: Parameter mit denen der Backtest durchgeführt wir
-        :return: Eine Liste aller Transaktionen oder bei einer einzelnen Strategie das Ergebnis
+        Führt den Backtest für ein Portfolio durch und sammelt alle Transaktionen.
+
+        :param tickers: Liste an Tickern, z.B., ['TSLA', 'MSFT', 'PLTR'].
+        :param params: Parameter, mit denen der Backtest durchgeführt wird.
+        :return: Liste aller ausgeführten Transaktionen (ggf. leer).
         """
         all_trades = []
-
         for ticker in tickers:
             trades = self._backtest(
                 ticker,
@@ -63,21 +59,31 @@ class MeanReversionStrategy:
                 lookback_days=params['lookback_days'],
                 hold_days=params['hold_days'],
                 take_profit_pct=params['take_profit_pct'],
-                fee_rate=params['fee_pct']
+                fee_rate=params['fee_pct'],
             )
             if trades:
                 all_trades.extend(trades)
+        return all_trades
 
-        if is_single:
-            result = calculate_strategy_result(all_trades, self._ticker_cache, self.initial_capital)
-            return result
-        else:
-            return all_trades
+    def run_portfolio_single(
+            self,
+            tickers: list[str],
+            params: ParameterCombinationDict,
+    ) -> StrategyResultDict:
+        """
+        Führt den Backtest durch und gibt das aggregierte Strategie-Ergebnis zurück.
+
+        :param tickers: Liste an Tickern.
+        :param params: Parameter mit denen der Backtest durchgeführt wird.
+        :return: Aggregiertes Ergebnis (ROI, Win-Rate, Equity-Kurve, Trades).
+        """
+        trades = self.run_portfolio(tickers, params)
+        return calculate_strategy_result(trades, self._ticker_cache, self.initial_capital)
 
     def get_cached_ticker_data(self) -> dict[str, pd.DataFrame]:
         return self._ticker_cache
 
-    def _get_ticker_data_for_backtest(self, ticker: str) -> pd.DataFrame:
+    def _get_ticker_data_for_backtest(self, ticker: str) -> pd.DataFrame | None:
         """
        Startet das Laden von Tickerdaten aus der Datenbank und speichert sie im Cache.
 
@@ -91,11 +97,11 @@ class MeanReversionStrategy:
             ticker,
             start_date=self.start_date,
             end_date=self.end_date,
-            is_optimized=False
+            include_low=False
         )
 
-        # if data is not None and not data.empty:
-        self._ticker_cache[ticker] = data
+        if data is not None and not data.empty:
+            self._ticker_cache[ticker] = data
 
         return data
 
@@ -133,7 +139,7 @@ class MeanReversionStrategy:
 
         open_prices = ticker_df['open'].to_numpy()
         high_prices = ticker_df['high'].to_numpy()
-        close_prices = ticker_df['open'].to_numpy()
+        close_prices = ticker_df['close'].to_numpy()
         dates = ticker_df.index
 
         for idx in signal_indices:

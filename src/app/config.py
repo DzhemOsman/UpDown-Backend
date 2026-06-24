@@ -1,9 +1,10 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Annotated
 
-from pydantic import field_validator
+from pydantic import field_validator, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import NoDecode
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 MEASUREMENT = "ohlcv_data"
@@ -16,15 +17,16 @@ class Settings(BaseSettings):
     )
 
     INFLUXDB_HOST: str
-    INFLUXDB_TOKEN: str
+    INFLUXDB_TOKEN: SecretStr
     INFLUXDB_DATABASE: str
-    CORS_ORIGINS: list[str] = ["http://localhost:8184"]
     OPTIMIZER_MAX_WORKERS: int = 3
+
+    CORS_ORIGINS: Annotated[list[str], NoDecode] = ["http://localhost:8184"]
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
-    def parse_cors_origins(cls, v: Any) -> list[str] | Any:
-        if isinstance(v, str) and not v.startswith("["):
+    def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
+        if isinstance(v, str):
             return [item.strip() for item in v.split(",")]
         return v
 

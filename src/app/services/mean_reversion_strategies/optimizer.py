@@ -1,13 +1,11 @@
+import itertools
 from datetime import datetime
-
-import pandas as pd
 
 from app.schemas.internal.best_parameter_combination_dict import (
     BestParameterCombinationDict,
     ParameterCombinationDict,
     BestResultDict
 )
-from app.services.mean_reversion_strategies.strategy_calculations import calculate_comparison_curves
 from app.services.mean_reversion_strategies.mean_reversion_defaults import (
     DEFAULT_INITIAL_CAPITAL,
     DEFAULT_START,
@@ -16,6 +14,8 @@ from app.services.mean_reversion_strategies.mean_reversion_defaults import (
     DEFAULT_FEE_RATE
 )
 from app.services.mean_reversion_strategies.mean_reversion_strategy import MeanReversionStrategy
+from app.services.mean_reversion_strategies.optimizer_utils import trades_to_metrics
+from app.services.mean_reversion_strategies.strategy_calculations import calculate_comparison_curves
 
 
 def optimize_grid_search(
@@ -47,55 +47,42 @@ def optimize_grid_search(
     best_trades = None
     best_params = None
 
-    for drop in drop_options:
-        for hold in hold_options:
-            for tp in take_profit_options:
-                current_params = ParameterCombinationDict(
-                    drop_threshold=drop,
-                    lookback_days=DEFAULT_LOOKBACK_DAYS,
-                    hold_days=hold,
-                    take_profit_pct=tp,
-                    fee_pct=DEFAULT_FEE_RATE
-                )
-                trades = bot.run_portfolio(tickers, current_params)
+    for drop, hold, tp in itertools.product(drop_options, hold_options, take_profit_options):
+        current_params = ParameterCombinationDict(
+            drop_threshold=drop,
+            lookback_days=DEFAULT_LOOKBACK_DAYS,
+            hold_days=hold,
+            take_profit_pct=tp,
+            fee_pct=DEFAULT_FEE_RATE,
+        )
+        trades = bot.run_portfolio(tickers, current_params)
 
-                if trades is None:
-                    break
+        current_roi, current_profit, current_win_rate, n_trades = trades_to_metrics(trades, initial_capital)
 
-                if trades:
-                    current_trades_df = pd.DataFrame(trades)
-                    current_profit = current_trades_df['profit_abs'].sum()
-                    current_roi = (current_profit / initial_capital) * 100
-                    current_win_rate = len(current_trades_df[current_trades_df['profit_abs'] > 0]) / len(
-                        current_trades_df) * 100
-                else:
-                    current_profit = 0
-                    current_roi = 0
-                    current_win_rate = 0
+        if current_roi > best_roi:
+            best_roi = current_roi
+            best_trades = trades
+            best_params = current_params
+            best_result = BestResultDict(
+                profit=current_profit,
+                win_rate=current_win_rate,
+                total_number_of_trades=n_trades
+            )
 
-                if current_roi > best_roi:
-                    best_roi = current_roi
-                    best_trades = trades
-                    best_params = current_params
-                    best_result = BestResultDict(
-                        profit=current_profit,
-                        win_rate=current_win_rate,
-                        total_number_of_trades=len(trades)
-                    )
+        if best_params is None or best_result is None or best_trades is None:
+            return None
 
-    if best_params is None or best_result is None or best_trades is None:
-        return None
+        equity_data = calculate_comparison_curves(best_trades, bot.get_cached_ticker_data(), initial_capital)
 
-    equity_data = calculate_comparison_curves(best_trades, bot.get_cached_ticker_data(), initial_capital)
-
-    return BestParameterCombinationDict(
-        best_drop_threshold=float(best_params['drop_threshold']),
-        best_hold_days=int(best_params['hold_days']),
-        best_take_profit_pct=float(best_params['take_profit_pct']),
-        total_profit=float(round(best_result['profit'], 2)),
-        roi_pct=float(round(best_roi, 2)),
-        win_rate=float(round(best_result['win_rate'], 2)),
-        total_number_of_trades=int(best_result['total_number_of_trades']),
-        equity_curve_data=equity_data,
-        trades=best_trades
-    )
+        return BestParameterCombinationDict(
+            best_drop_threshold=float(best_params['drop_threshold']),
+            best_hold_days=int(best_params['hold_days']),
+            best_take_profit_pct=float(best_params['take_profit_pct']),
+            total_profit=float(round(best_result['profit'], 2)),
+            roi_pct=float(round(best_roi, 2)),
+            win_rate=float(round(best_result['win_rate'], 2)),
+            total_number_of_trades=int(best_result['total_number_of_trades']),
+            equity_curve_data=equity_data,
+            trades=best_trades
+        )
+    return None
