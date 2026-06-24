@@ -1,4 +1,4 @@
-from typing import TypedDict, NotRequired, Optional
+from typing import TypedDict, NotRequired, Optional, NamedTuple
 
 from app.schemas.internal.chart_data_dict import ChartDataDict
 from app.schemas.internal.trade_result_dict import TradeResultDict
@@ -27,10 +27,19 @@ class ParameterCombinationDict(TypedDict):
     fee_pct: float
     stop_loss_pct: float | None
     max_positions: int | None
-    allocation_pct: float| None
+    allocation_pct: float | None
 
 
 class BestResultDict(TypedDict):
     profit: float
     win_rate: float
     total_number_of_trades: int
+
+
+class Combo(NamedTuple):
+    drop_threshold: float
+    hold_days: int
+    take_profit_pct: float
+    stop_loss_pct: float
+    max_positions: int
+    allocation_pct: float

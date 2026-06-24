@@ -119,6 +119,9 @@ class MeanReversionWithMoneyManagement:
     def get_cached_ticker_data(self) -> dict[str, pd.DataFrame]:
         return self._ticker_cache
 
+    def set_ticker_cache(self, ticker_cache: dict[str, pd.DataFrame]) -> None:
+        self._ticker_cache = ticker_cache
+
     def _get_ticker_data_for_backtest(self, ticker: str) -> pd.DataFrame:
         """
        Startet das Laden von Tickerdaten aus der Datenbank und speichert sie im Cache.

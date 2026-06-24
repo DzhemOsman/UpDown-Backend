@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     INFLUXDB_TOKEN: str
     INFLUXDB_DATABASE: str
     CORS_ORIGINS: list[str] = ["http://localhost:8184"]
+    OPTIMIZER_MAX_WORKERS: int = 3
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
