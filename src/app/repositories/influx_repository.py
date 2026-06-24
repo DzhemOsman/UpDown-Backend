@@ -5,7 +5,6 @@ from influxdb_client_3 import Point
 
 from app.config import MEASUREMENT
 from app.core.influx import get_client
-from app.schemas.api.query_request import QueryRequest
 
 
 def write_points(points: list[Point]) -> None:
@@ -17,6 +16,11 @@ def write_points(points: list[Point]) -> None:
     """
     client = get_client()
     client.write(record=points)
+
+
+def _build_ticker_query(ticker, start_str, end_str) -> tuple[str, dict]:
+    sql = f"SELECT * FROM '{MEASUREMENT}' WHERE ticker = $ticker AND time >= $start AND time <= $end ORDER BY time"
+    return sql, {"ticker": ticker, "start": start_str, "end": end_str}
 
 
 def get_data_for_ticker_and_range(
@@ -37,10 +41,9 @@ def get_data_for_ticker_and_range(
     start_str = start_date.strftime("%Y-%m-%d %H:%M:%S")
     end_str = end_date.strftime("%Y-%m-%d %H:%M:%S")
 
-    request = QueryRequest(
-        sql=f"SELECT * FROM '{MEASUREMENT}' WHERE ticker = '{ticker}' AND time >= '{start_str}' AND time <= '{end_str}' ORDER BY time")
+    sql, params = _build_ticker_query(ticker, start_str, end_str)
+    result = client.query(query=sql, query_parameters=params)
 
-    result = client.query(request.sql)
     if result is None:
         return pd.DataFrame()
 

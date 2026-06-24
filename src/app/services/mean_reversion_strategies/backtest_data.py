@@ -12,7 +12,7 @@ def get_backtest_data(
         ticker: str,
         start_date: datetime,
         end_date: datetime,
-        is_optimized: bool
+        include_low: bool
 ) -> pd.DataFrame | None:
     """
     Lädt OHLC-Daten aus InfluxDB und bringt sie in das Format,
@@ -21,7 +21,7 @@ def get_backtest_data(
     :param ticker: Ticker-Symbol, welches geladen werden soll z.B.: 'PLTR'
     :param start_date: Datum, ab wann Daten gelesen werden sollen
     :param end_date: Datum, bis wann Daten gelesen werden sollen
-    :param is_optimized: Boolean, ob ursprünglicher oder neuer Algorithmus
+    :param include_low: Boolean, ob ursprünglicher oder neuer Algorithmus
     :return: Wenn Daten geliefert werden ein DataFrame ansonsten None
     """
     try:
@@ -30,7 +30,7 @@ def get_backtest_data(
         logger.error(f"Fehler beim Laden von {ticker}: {e}", exc_info=True)
         return None
 
-    if df is None or df.empty:
+    if df.empty:
         logger.warning(f"Keine Daten für Ticker: {ticker}")
         return None
 
@@ -40,7 +40,7 @@ def get_backtest_data(
 
         # Benötigte Spalten markieren für Extrahierung
         columns_to_keep = ["open", "high", "close"]
-        if is_optimized:
+        if include_low:
             columns_to_keep.append("low")
 
         clean_df = df[columns_to_keep].copy()

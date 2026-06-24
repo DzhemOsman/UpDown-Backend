@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime as dt
 
 import numpy as np
 import pandas as pd
@@ -27,8 +27,8 @@ class MeanReversionWithMoneyManagement:
     def __init__(
             self,
             initial_capital: int = DEFAULT_INITIAL_CAPITAL,
-            start_date: datetime = DEFAULT_START,
-            end_date: datetime = DEFAULT_END,
+            start_date: dt = DEFAULT_START,
+            end_date: dt = DEFAULT_END,
     ):
         self.initial_capital = initial_capital
         self.start_date = start_date
@@ -41,19 +41,23 @@ class MeanReversionWithMoneyManagement:
             params: ParameterCombinationDict,
             is_kadane: bool | None = False,
             is_trend: bool | None = False,
-            is_single: bool = False
-    ) -> list[TradeResultDict] | StrategyResultDict:
+    ) -> list[TradeResultDict]:
+
         """
-        Starte den backtest() für ein Portfolio(Eine Sammlung von Assets) und speichert alle gemachten Transaktionen
-        (trades).
-        
-        :param is_single: Bool, ob Funktion nur eine einzelne Kombination ausprobiert oder mehrere.
-        :param is_trend: Bool, ob Mean-Reversion mithilfe des SMA berechnet werden soll.
-        :param is_kadane: Bool, ob für die Suche die minimale Abschnittssuche implementiert werden soll.
+        Führt den Money-Management-Backtest für ein Portfolio durch und gibt die
+        tatsächlich ausgeführten Transaktionen zurück.
+
         :param tickers: Liste an Tickern, z.B., ['TSLA', 'MSFT', 'PLTR'].
-        :param params: Parameter mit denen der Backtest durchgeführt wir.
-        :return: Eine Liste aller Transaktionen.
+        :param params: Parameter mit denen der Backtest durchgeführt wird.
+        :param is_kadane: Bool, ob die Kadane-Abschnittssuche für die Signalerkennung verwendet wird.
+        :param is_trend: Bool, ob Mean-Reversion mithilfe des SMA berechnet werden soll.
+        :return: Liste der tatsächlich ausgeführten Transaktionen.
         """
+        if params['max_positions'] is None or params['allocation_pct'] is None:
+            raise ValueError(
+                "max_positions und allocation_pct müssen für Money Management gesetzt sein"
+            )
+
         all_potential_trades = []
 
         for ticker in tickers:
@@ -66,39 +70,33 @@ class MeanReversionWithMoneyManagement:
                 fee_rate=params['fee_pct'],
                 stop_loss_pct=params['stop_loss_pct'],
                 is_kadane=is_kadane,
-                is_trend=is_trend
+                is_trend=is_trend,
             )
             if trades:
                 all_potential_trades.extend(trades)
 
-        all_potential_trades.sort(key=lambda x: x['buy_date'])
+        all_potential_trades.sort(key=lambda x: dt.strptime(x['buy_date'], '%Y-%m-%d'))
 
         current_capital = self.initial_capital
         active_trades: list[TradeResultDict] = []
         executed_trades: list[TradeResultDict] = []
 
         for trade in all_potential_trades:
-            trade_date = trade['buy_date']
+            trade_date = dt.strptime(trade['buy_date'], '%Y-%m-%d')
 
             # A. Geschlossene Positionen abrechnen
-            # Prüfen, ob offene Positionen am heutigen trade_date bereits verkauft wurden
             still_active = []
             for active in active_trades:
-                # Wenn das Verkaufsdatum in der Vergangenheit oder am selben Tag (morgens/abends) liegt:
-                if active['sell_date'] <= trade_date:
-                    # Kapital wird freigegeben (Initiales Investment + erwirtschafteter Profit)
+                if dt.strptime(active['sell_date'], '%Y-%m-%d') <= trade_date:
                     current_capital += (active['invested_capital'] + active['profit_abs'])
                 else:
                     still_active.append(active)
-            active_trades = still_active  # Nur noch die laufenden Trades behalten
+            active_trades = still_active
 
             # B. Prüfen, ob neues Signal angenommen wird (Positions-Limit)
             if len(active_trades) < params['max_positions']:
                 # C. Positionsgröße berechnen (Compounding)
-                # Anteil vom momentan verfügbaren Kapital
                 allocation = current_capital * (params['allocation_pct'] / 100)
-
-                # Trade mit echten Geldwerten aktualisieren
                 actual_profit = allocation * (trade['profit_pct'] / 100)
 
                 trade['invested_capital'] = round(allocation, 2)
@@ -110,11 +108,27 @@ class MeanReversionWithMoneyManagement:
                 active_trades.append(trade)
                 executed_trades.append(trade)
 
-        if is_single:
-            result = calculate_strategy_result(executed_trades, self._ticker_cache, self.initial_capital)
-            return result
-        else:
-            return executed_trades
+        return executed_trades
+
+    def run_portfolio_with_money_management_single(
+            self,
+            tickers: list[str],
+            params: ParameterCombinationDict,
+            is_kadane: bool | None = False,
+            is_trend: bool | None = False,
+    ) -> StrategyResultDict:
+        """
+        Führt den Money-Management-Backtest durch und gibt das aggregierte
+        Strategie-Ergebnis (ROI, Win-Rate, Equity-Kurve, Trades) zurück.
+
+        :param tickers: Liste an Tickern.
+        :param params: Parameter mit denen der Backtest durchgeführt wird.
+        :param is_kadane: Bool, ob die Kadane-Abschnittssuche verwendet wird.
+        :param is_trend: Bool, ob die SMA-Trendlogik verwendet wird.
+        :return: Aggregiertes Strategie-Ergebnis.
+        """
+        trades = self.run_portfolio_with_money_management(tickers, params, is_kadane, is_trend)
+        return calculate_strategy_result(trades, self._ticker_cache, self.initial_capital)
 
     def get_cached_ticker_data(self) -> dict[str, pd.DataFrame]:
         return self._ticker_cache
@@ -122,12 +136,12 @@ class MeanReversionWithMoneyManagement:
     def set_ticker_cache(self, ticker_cache: dict[str, pd.DataFrame]) -> None:
         self._ticker_cache = ticker_cache
 
-    def _get_ticker_data_for_backtest(self, ticker: str) -> pd.DataFrame:
+    def _get_ticker_data_for_backtest(self, ticker: str) -> pd.DataFrame | None:
         """
-       Startet das Laden von Tickerdaten aus der Datenbank und speichert sie im Cache.
+        Startet das Laden von Tickerdaten aus der Datenbank und speichert sie im Cache.
 
         :param ticker: Ticker-Symbol, z.B., 'AAPL' der von der Datenbank abgefragt wird.
-        :return: Daten des angefragten Tickers als pd.DataFrame.
+        :return: Daten des angefragten Tickers als pd.DataFrame, oder None bei Fehlschlag.
         """
         if ticker in self._ticker_cache:
             return self._ticker_cache[ticker]
@@ -136,11 +150,11 @@ class MeanReversionWithMoneyManagement:
             ticker,
             start_date=self.start_date,
             end_date=self.end_date,
-            is_optimized=True
+            include_low=True,
         )
 
-        # if data is not None and not data.empty:
-        self._ticker_cache[ticker] = data
+        if data is not None and not data.empty:
+            self._ticker_cache[ticker] = data
 
         return data
 
@@ -176,7 +190,7 @@ class MeanReversionWithMoneyManagement:
             hold_days: int,
             take_profit_pct: float,
             fee_rate: float,
-            stop_loss_pct: float| None,
+            stop_loss_pct: float | None,
             is_kadane: bool | None = False,
             is_trend: bool | None = False
     ) -> list[TradeResultDict]:
@@ -197,6 +211,7 @@ class MeanReversionWithMoneyManagement:
         ticker_df = self._get_ticker_data_for_backtest(ticker)
         if ticker_df is None or ticker_df.empty:
             return []
+        ticker_df = ticker_df.copy()
 
         threshold_decimal = -(drop_threshold_pct / 100)
 
@@ -244,7 +259,7 @@ class MeanReversionWithMoneyManagement:
             # Trade wird erst am nächsten Tag ausgeführt, da erst bei Börsenschluss der Tagesschluss bekannt ist.
             entry_idx = idx + 1
 
-            if entry_idx <= last_exit_index:
+            if entry_idx < last_exit_index:
                 continue
             if entry_idx >= len(ticker_df):
                 continue
@@ -262,7 +277,6 @@ class MeanReversionWithMoneyManagement:
 
             for i in range(0, hold_days):
                 current_idx = entry_idx + i
-
                 if current_idx >= len(ticker_df):
                     break
 
@@ -272,30 +286,25 @@ class MeanReversionWithMoneyManagement:
                 current_close = close_prices[current_idx]
                 current_date = dates[current_idx]
 
-                # Take-Profit Logik
-                can_sell_at_open = (i > 0)
+                can_exit_intraday = (i > 0)  # Stop/Take-Profit erst ab Folgetag
+
                 # Stop-Loss Logik
-                if current_low <= stop_price:
-                    # Wenn Eröffnung schon unter Stop, dann zur Eröffnung raus
-                    if i > 0 and current_open < stop_price:
+                if can_exit_intraday and current_low <= stop_price:
+                    if current_open < stop_price:
                         raw_exit_price = current_open
                     else:
                         raw_exit_price = stop_price
-
                     exit_reason = "Stop Loss"
                     days_held = i
                     found_exit = True
-                elif current_high >= target_price:
-                    if can_sell_at_open and current_open > target_price:
+                elif can_exit_intraday and current_high >= target_price:
+                    if current_open > target_price:
                         raw_exit_price = current_open
                     else:
                         raw_exit_price = target_price
-
                     exit_reason = "Take Profit"
                     days_held = i
                     found_exit = True
-
-                # Stopp, wenn Haltedauer erreicht wurde
                 elif i == (hold_days - 1):
                     raw_exit_price = current_close
                     exit_reason = "Time Stop"

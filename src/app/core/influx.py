@@ -10,6 +10,6 @@ def get_client() -> influxdb3.InfluxDBClient3:
     settings = get_settings()
     return influxdb3.InfluxDBClient3(
         host=settings.INFLUXDB_HOST,
-        token=settings.INFLUXDB_TOKEN,
+        token=settings.INFLUXDB_TOKEN.get_secret_value(),
         database=settings.INFLUXDB_DATABASE,
     )

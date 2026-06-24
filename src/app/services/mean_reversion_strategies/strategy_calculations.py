@@ -51,7 +51,9 @@ def calculate_comparison_curves(
     curve_df['strategy_equity'] = curve_df['strategy_equity'].ffill()
 
     # BUY & HOLD BENCHMARK
-    allocation_per_ticker = initial_capital / len(ticker_data)
+    if not close_series:
+        return []
+    allocation_per_ticker = initial_capital / len(close_series)
     curve_df['benchmark_equity'] = 0.0
 
     for ticker, ticker_df in ticker_data.items():
@@ -77,6 +79,7 @@ def calculate_comparison_curves(
         )
 
     return chart_data
+
 
 def calculate_strategy_result(
         trades: list[TradeResultDict],

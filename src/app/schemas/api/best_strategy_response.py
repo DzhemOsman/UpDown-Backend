@@ -15,7 +15,6 @@ class BestStrategyResponse(BaseModel):
     total_profit: float
     roi_pct: float
     win_rate: float
-    best_stop_loss_pct: float
     total_number_of_trades: int
     equity_curve_data: list[dict]
     trades: list[TradeResult]

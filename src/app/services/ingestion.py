@@ -8,10 +8,8 @@ import pandas as pd
 import yfinance as yf
 from influxdb_client_3 import Point, WritePrecision
 
-from app.repositories.influx_repository import (
-    MEASUREMENT,
-    write_points,
-)
+from app.config import MEASUREMENT
+from app.repositories.influx_repository import write_points
 from app.services.mean_reversion_strategies.mean_reversion_defaults import DEFAULT_START, DEFAULT_END
 
 logger = logging.getLogger(__name__)
@@ -29,14 +27,13 @@ def ingest_ticker(
     :param ticker: Ticker-Symbol für Asset z.B.: 'TSLA'
     :param start: Datum ab den Daten geschrieben werden sollen
     :param end: Datum bis wann die Daten geschrieben werden sollen
-    :return: Anzahl der in InfluxDB geschriebenen Ticker (Datenpunkte)
+    :return: Anzahl der in InfluxDB geschriebenen Datenpunkte
     """
-    start_str = start.strftime("%Y-%m-%d")
-    end_str = end.strftime("%Y-%m-%d")
-
-    if start_str >= end_str:
+    if start >= end:
         logger.warning(f"[{ticker}] Startdatum liegt nicht vor Enddatum, nichts zu tun.")
         return 0
+    start_str = start.strftime("%Y-%m-%d")
+    end_str = end.strftime("%Y-%m-%d")
 
     logger.info(f"[{ticker}] Voll-Reload {start_str} bis {end_str}...")
 
@@ -48,7 +45,7 @@ def ingest_ticker(
         auto_adjust=True,
     )
 
-    if df is None or df.empty:
+    if df.empty:
         logger.warning(f"[{ticker}] Keine Daten.")
         return 0
 
@@ -57,7 +54,7 @@ def ingest_ticker(
 
     df = df.dropna(subset=["Open", "High", "Low", "Close", "Volume"])
 
-    # Zeitzonen-Konvertierung, InfluxDB speicherr diese mit
+    # Zeitzonen-Konvertierung, InfluxDB speichert diese mit
     if df.index.tz is None:
         df.index = df.index.tz_localize("UTC")
     else:

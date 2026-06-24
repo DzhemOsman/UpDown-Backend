@@ -9,19 +9,21 @@ import pandas as pd
 from app.config import get_settings
 from app.schemas.internal.best_parameter_combination_dict import (
     BestParameterCombinationDict,
-    ParameterCombinationDict,
-    BestResultDict, Combo
+    BestResultDict,
+    Combo
 )
 from app.services.mean_reversion_strategies.backtest_data import get_backtest_data
 from app.services.mean_reversion_strategies.mean_reversion_defaults import (
     DEFAULT_INITIAL_CAPITAL,
     DEFAULT_START,
-    DEFAULT_END,
-    DEFAULT_LOOKBACK_DAYS,
-    DEFAULT_FEE_RATE
+    DEFAULT_END
 )
 from app.services.mean_reversion_strategies.money_management_reversion import MeanReversionWithMoneyManagement
-from app.services.mean_reversion_strategies.parallel_executor import _init_worker, _evaluate
+from app.services.mean_reversion_strategies.optimizer_utils import combo_to_params
+from app.services.mean_reversion_strategies.parallel_executor import (
+    _init_worker,
+    _evaluate
+)
 from app.services.mean_reversion_strategies.strategy_calculations import calculate_comparison_curves
 
 logger = logging.getLogger(__name__)
@@ -149,7 +151,7 @@ def _find_best_combination(
     # 1. Tickerdaten EINMAL im Hauptprozess laden.
     ticker_data: dict[str, pd.DataFrame] = {}
     for ticker in tickers:
-        df = get_backtest_data(ticker, start_date=start, end_date=end, is_optimized=True)
+        df = get_backtest_data(ticker, start_date=start, end_date=end, include_low=True)
         if df is not None and not df.empty:
             ticker_data[ticker] = df
 
@@ -158,7 +160,7 @@ def _find_best_combination(
         return None
 
     # 2. Kombinationen parallel auswerten (Prozesse wegen GIL, nicht Threads).
-    #    map() verlangt eine materialisierte Sequenz -> beim Grid den Lazy-Iterator vorher in eine Liste ziehen.
+    # _build_combinations liefert bereits eine Liste; map() verteilt sie auf die Worker.
     best_roi = float('-inf')
     best_combo = None
     best_result = None
@@ -168,7 +170,7 @@ def _find_best_combination(
             initializer=_init_worker,
             initargs=(ticker_data, initial_capital, is_kadane, is_trend),
     ) as executor:
-        for combo, roi, profit, win_rate, n_trades in executor.map(_evaluate, combinations):
+        for combo, roi, profit, win_rate, n_trades in executor.map(_evaluate, combinations, chunksize=10):
             if roi > best_roi:
                 best_roi = roi
                 best_combo = combo
@@ -181,16 +183,7 @@ def _find_best_combination(
     if best_combo is None or best_result is None:
         return None
 
-    best_params = ParameterCombinationDict(
-        drop_threshold=best_combo.drop_threshold,
-        lookback_days=DEFAULT_LOOKBACK_DAYS,
-        hold_days=best_combo.hold_days,
-        take_profit_pct=best_combo.take_profit_pct,
-        stop_loss_pct=best_combo.stop_loss_pct,
-        max_positions=best_combo.max_positions,
-        allocation_pct=best_combo.allocation_pct,
-        fee_pct=DEFAULT_FEE_RATE,
-    )
+    best_params = combo_to_params(best_combo)
 
     bot = MeanReversionWithMoneyManagement(
         initial_capital=initial_capital, start_date=start, end_date=end
@@ -203,12 +196,12 @@ def _find_best_combination(
     equity_data = calculate_comparison_curves(best_trades, ticker_data, initial_capital)
 
     return BestParameterCombinationDict(
-        best_drop_threshold=float(best_params['drop_threshold']),
-        best_hold_days=int(best_params['hold_days']),
-        best_take_profit_pct=float(best_params['take_profit_pct']),
-        best_stop_loss_pct=float(best_params['stop_loss_pct']),
-        best_max_positions=int(best_params['max_positions']),
-        best_allocation_pct=float(best_params['allocation_pct']),
+        best_drop_threshold=float(best_combo.drop_threshold),
+        best_hold_days=int(best_combo.hold_days),
+        best_take_profit_pct=float(best_combo.take_profit_pct),
+        best_stop_loss_pct=float(best_combo.stop_loss_pct),
+        best_max_positions=int(best_combo.max_positions),
+        best_allocation_pct=float(best_combo.allocation_pct),
         total_profit=float(round(best_result['profit'], 2)),
         roi_pct=float(round(best_roi, 2)),
         win_rate=float(round(best_result['win_rate'], 2)),
