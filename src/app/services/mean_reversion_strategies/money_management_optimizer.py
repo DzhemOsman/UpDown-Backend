@@ -9,7 +9,8 @@ import pandas as pd
 from app.config import get_settings
 from app.schemas.internal.best_parameter_combination_dict import (
     BestParameterCombinationDict,
-    BestResultDict, Combo, combo_to_params
+    BestResultDict,
+    Combo
 )
 from app.services.mean_reversion_strategies.backtest_data import get_backtest_data
 from app.services.mean_reversion_strategies.mean_reversion_defaults import (
@@ -18,7 +19,11 @@ from app.services.mean_reversion_strategies.mean_reversion_defaults import (
     DEFAULT_END
 )
 from app.services.mean_reversion_strategies.money_management_reversion import MeanReversionWithMoneyManagement
-from app.services.mean_reversion_strategies.parallel_executor import _init_worker, _evaluate
+from app.services.mean_reversion_strategies.optimizer_utils import combo_to_params
+from app.services.mean_reversion_strategies.parallel_executor import (
+    _init_worker,
+    _evaluate
+)
 from app.services.mean_reversion_strategies.strategy_calculations import calculate_comparison_curves
 
 logger = logging.getLogger(__name__)
