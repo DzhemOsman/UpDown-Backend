@@ -1,4 +1,4 @@
-from typing import TypedDict, NotRequired, Optional, NamedTuple
+from typing import NamedTuple, NotRequired, Optional, TypedDict
 
 from app.schemas.internal.chart_data_dict import ChartDataDict
 from app.schemas.internal.trade_result_dict import TradeResultDict

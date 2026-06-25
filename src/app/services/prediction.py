@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import functools
 import logging
 import os
 import pickle
-import functools
+
 import pandas as pd
-import numpy as np
+
+from app.repositories.influx_repository import get_data_for_ticker_and_range
 
 # Importiere eure bewährten Komponenten
 from app.services.feature_engineering import build_features
-from app.repositories.influx_repository import get_data_for_ticker_and_range
-from app.services.ingestion import DEFAULT_START, DEFAULT_END
+from app.services.ingestion import DEFAULT_END, DEFAULT_START
 
 logger = logging.getLogger(__name__)
 MODEL_DIR = "models"
@@ -25,7 +26,8 @@ def get_model(ticker: str):
     model_path = os.path.join(MODEL_DIR, f"lgbm_trend_{ticker.lower()}.pkl")
     if not os.path.exists(model_path):
         raise FileNotFoundError(
-            f"Modelldatei '{model_path}' nicht gefunden. Bitte trainiere zuerst das Modell für {ticker}!"
+            f"Modelldatei '{model_path}' nicht gefunden. "
+            f"Bitte trainiere zuerst das Modell für {ticker}!"
         )
 
     logger.info(f"[{ticker}] Lade Modell aus Datei {model_path} in den Cache...")
@@ -48,7 +50,10 @@ def predict_ticker_trend(ticker: str, date_str: str) -> dict:
     df_vix = get_data_for_ticker_and_range("^VIX", DEFAULT_START, DEFAULT_END)
 
     if df_target.empty or df_market.empty or df_vix.empty:
-        raise ValueError(f"Unvollständige historische Daten in InfluxDB, um Features für {ticker} zu berechnen.")
+        raise ValueError(
+            f"Unvollständige historische Daten in InfluxDB, "
+            f"um Features für {ticker} zu berechnen."
+        )
 
     # 3. Datenframes für das Feature-Engineering vereinheitlichen
     for df in [df_target, df_market, df_vix]:
@@ -69,9 +74,20 @@ def predict_ticker_trend(ticker: str, date_str: str) -> dict:
     df_features = df_features.join(vix_close, how="inner")
 
     # Nicht benötigte Preisspalten löschen (Das Modell kennt nur relative Indikatoren)
-    columns_to_drop = ["ticker", "open", "high", "low", "close", "volume", "bollinger_mid", "bollinger_std",
-                       "volume_sma_20"]
-    df_model_input = df_features.drop(columns=[col for col in columns_to_drop if col in df_features.columns])
+    columns_to_drop = [
+        "ticker",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "bollinger_mid",
+        "bollinger_std",
+        "volume_sma_20",
+    ]
+    df_model_input = df_features.drop(
+        columns=[col for col in columns_to_drop if col in df_features.columns]
+    )
 
     # 5. Den angeforderten Tag aus der Zeitreihe heraussuchen
     target_date = pd.to_datetime(date_str).date()
@@ -79,7 +95,9 @@ def predict_ticker_trend(ticker: str, date_str: str) -> dict:
 
     if row_match.empty:
         raise KeyError(
-            f"Für das Datum {date_str} konnten keine ausreichenden Features berechnet werden (z.B. wegen fehlender Historie davor).")
+            f"Für das Datum {date_str} konnten keine ausreichenden Features "
+            f"berechnet werden (z.B. wegen fehlender Historie davor)."
+        )
 
     # 6. Einzelne Zeile isolieren und Vorhersage treffen
     X_pred = row_match.iloc[[0]]
@@ -91,10 +109,10 @@ def predict_ticker_trend(ticker: str, date_str: str) -> dict:
     return {
         "ticker": ticker.upper(),
         "date": str(target_date),
-        "prediction": prediction,  # 1 = Trend startet (>=5% in 20 Tagen), 0 = Kein Trend
+        "prediction": prediction,
         "probability": round(probability, 4),
         "market_context": {
             "vix_level": float(X_pred["vix_close"].iloc[0]),
-            "market_return_1d": float(X_pred["market_return_1d"].iloc[0])
-        }
+            "market_return_1d": float(X_pred["market_return_1d"].iloc[0]),
+        },
     }

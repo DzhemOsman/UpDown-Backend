@@ -1,8 +1,13 @@
 import pandas as pd
 
 from app.schemas.internal.best_parameter_combination_dict import Combo
-from app.services.mean_reversion_strategies.money_management_reversion import MeanReversionWithMoneyManagement
-from app.services.mean_reversion_strategies.optimizer_utils import trades_to_metrics, combo_to_params
+from app.services.mean_reversion_strategies.money_management_reversion import (
+    MeanReversionWithMoneyManagement,
+)
+from app.services.mean_reversion_strategies.optimizer_utils import (
+    combo_to_params,
+    trades_to_metrics,
+)
 
 _WORKER_DATA: dict[str, pd.DataFrame] = {}
 _WORKER_CFG: tuple = ()
@@ -36,6 +41,8 @@ def _evaluate(combo: Combo) -> tuple[Combo, float, float, float, int]:
         list(_WORKER_DATA), current_params, is_kadane, is_trend
     )
 
-    current_roi, current_profit, current_win_rate, n_trades = trades_to_metrics(trades, initial_capital)
+    current_roi, current_profit, current_win_rate, n_trades = trades_to_metrics(
+        trades, initial_capital
+    )
 
     return combo, current_roi, current_profit, current_win_rate, n_trades

@@ -42,4 +42,4 @@ def test_aggregates_profit_and_roi():
     assert result["roi_pct"] == pytest.approx(4.0)
     assert result["win_rate"] == pytest.approx(66.67, abs=1e-2)
     assert result["total_number_of_trades"] == 3
-    assert result["equity_curve_data"] == []     # leere ticker_data -> leere Kurve
+    assert result["equity_curve_data"] == []  # leere ticker_data -> leere Kurve

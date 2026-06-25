@@ -9,10 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_backtest_data(
-        ticker: str,
-        start_date: datetime,
-        end_date: datetime,
-        include_low: bool
+    ticker: str, start_date: datetime, end_date: datetime, include_low: bool
 ) -> pd.DataFrame | None:
     """
     Lädt OHLC-Daten aus InfluxDB und bringt sie in das Format,
@@ -28,12 +25,13 @@ def get_backtest_data(
 
     if df.empty:
         # KEIN Infra-Fehler: Ticker existiert nicht / hat keine Daten im Zeitraum.
-        # None = "diesen Ticker überspringen" -> wichtig für Multi-Ticker-Optimierung.
+        # None = "diesen Ticker überspringen" → wichtig für Multi-Ticker-Optimierung.
         logger.warning(f"Keine Daten für Ticker: {ticker}")
         return None
 
     try:
-        # InfluxDB liefert Zeitzonen mit, deshalb muss die Lokalisierung zuerst entfernt werden.
+        # InfluxDB liefert Zeitzonen mit, deshalb muss die Lokalisierung zuerst
+        # entfernt werden.
         df.index = pd.DatetimeIndex(df["time"]).tz_localize(None)
 
         columns_to_keep = ["open", "high", "close"]
@@ -43,17 +41,19 @@ def get_backtest_data(
         clean_df = df[columns_to_keep].copy()
         clean_df = clean_df.sort_index()
 
-        # Tage ohne handelbaren Kurs (NaN in einer Preisspalte) entfernen.
-        # Begruendung: Ein fehlender Kurs ist kein auffuellbarer Wert, sondern ein
-        # Tag, an dem real nicht gehandelt werden konnte. Wuerden wir ffill/bfill
+        # Tage ohne handelbaren Kurs (NaN in einer Preisspalt-) entfernen.
+        # Begründung: Ein fehlender Kurs ist kein auffüllbarer Wert, sondern ein
+        # Tag, an dem real nicht gehandelt werden konnte. Würden wir ffill/bfill
         # nutzen, erlaubten wir dem Backtest Trades zu erfundenen Preisen.
-        # dropna entfernt genau diese Zeilen -> die NumPy-Arrays im Hot-Loop
+        # dropna entfernt genau diese Zeilen → die NumPy-Arrays im Hot-Loop
         # enthalten danach garantiert keine NaN mehr.
         clean_df = clean_df.dropna(subset=columns_to_keep)
 
         if clean_df.empty:
-            # Nach dem Bereinigen blieb nichts uebrig -> wie "keine Daten" behandeln.
-            logger.warning(f"Keine handelbaren Kursdaten fuer Ticker {ticker} nach NaN-Bereinigung.")
+            # Nach dem Bereinigen blieb nichts übrig → wie "keine Daten" behandeln.
+            logger.warning(
+                f"Keine handelbaren Kursdaten für Ticker {ticker} nach NaN-Bereinigung."
+            )
             return None
 
         return clean_df

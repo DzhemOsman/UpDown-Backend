@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 def _cache_is_complete(
-        df: pd.DataFrame | None,
-        start_date: datetime,
-        end_date: datetime,
+    df: pd.DataFrame | None,
+    start_date: datetime,
+    end_date: datetime,
 ) -> bool:
     """
     Prüft, ob das aus der DB gelesene DataFrame den angefragten Zeitraum
@@ -46,9 +46,9 @@ def _cache_is_complete(
 
 
 def fetch_ticker_data(
-        ticker: str,
-        start_date: datetime,
-        end_date: datetime,
+    ticker: str,
+    start_date: datetime,
+    end_date: datetime,
 ) -> pd.DataFrame:
     """
     Startet Leseprozess der angeforderten Daten aus der Datenbank. Wenn sie nicht
@@ -58,7 +58,8 @@ def fetch_ticker_data(
     :param ticker: Ticker-Symbol, welches geladen werden soll z.B.: 'PLTR'
     :param start_date: Datum, ab wann Daten gelesen werden sollen
     :param end_date: Datum, bis wann Daten gelesen werden sollen
-    :return: Wenn Daten erfolgreich gelesen, gefülltes DataFrame ansonsten leeres DataFrame
+    :return: Wenn Daten erfolgreich gelesen, gefülltes DataFrame
+    ansonsten leeres DataFrame
     """
     if not ticker:
         raise ValueError("ticker must not be empty")
@@ -96,7 +97,9 @@ def fetch_ticker_data(
     try:
         df = get_data_for_ticker_and_range(ticker, start_date, end_date)
     except Exception as exc:
-        logger.error(f"InfluxDB-Lesefehler nach Ingestion für {ticker}: {exc}", exc_info=True)
+        logger.error(
+            f"InfluxDB-Lesefehler nach Ingestion für {ticker}: {exc}", exc_info=True
+        )
         raise DataSourceError(
             f"Marktdaten für '{ticker}' konnten nach dem Laden nicht gelesen werden."
         ) from exc

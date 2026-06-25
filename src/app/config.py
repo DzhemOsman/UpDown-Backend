@@ -2,9 +2,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import field_validator, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic_settings import NoDecode
+from pydantic import SecretStr, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 MEASUREMENT = "ohlcv_data"
