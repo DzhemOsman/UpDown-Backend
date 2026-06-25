@@ -5,6 +5,7 @@ from datetime import datetime
 
 import pandas as pd
 
+from app.core.exceptions import DataSourceError
 from app.repositories.influx_repository import get_data_for_ticker_and_range
 from app.services.ingestion import ingest_ticker
 
@@ -64,20 +65,40 @@ def fetch_ticker_data(
     if start_date >= end_date:
         raise ValueError("start_date must be before end_date")
 
+    # 1. Erster Lese-Versuch: DB-Fehler ist Infrastruktur, NICHT "keine Daten".
     try:
         df = get_data_for_ticker_and_range(ticker, start_date, end_date)
-    except Exception as e:
-        logger.error(f"Fehler beim Abrufen der Daten für {ticker}: {e}", exc_info=True)
-        df = None
+    except Exception as exc:
+        logger.error(f"InfluxDB-Lesefehler für {ticker}: {exc}", exc_info=True)
+        raise DataSourceError(
+            f"Marktdaten für '{ticker}' konnten nicht gelesen werden."
+        ) from exc
 
     if _cache_is_complete(df, start_date, end_date):
         return df
 
-    logger.info(f"Daten für {ticker} unvollständig oder fehlen. Starte Ingestion-Prozess...")
-    written = ingest_ticker(ticker, start=start_date, end=end_date)
+    # 2. Ingestion-Pfad: yfinance-Download + DB-Write absichern.
+    logger.info(f"Daten für {ticker} unvollständig oder fehlen. Starte Ingestion...")
+    try:
+        written = ingest_ticker(ticker, start=start_date, end=end_date)
+    except Exception as exc:
+        logger.error(f"Ingestion für {ticker} fehlgeschlagen: {exc}", exc_info=True)
+        raise DataSourceError(
+            f"Marktdaten für '{ticker}' konnten nicht geladen werden."
+        ) from exc
 
     if written == 0:
+        # yfinance lieferte nichts -> Ticker existiert vermutlich nicht.
+        # Das ist KEIN Infra-Fehler -> leeres DataFrame, später 404.
         return pd.DataFrame()
 
-    df = get_data_for_ticker_and_range(ticker, start_date, end_date)
+    # 3. Zweiter Lese-Versuch nach Ingestion ebenfalls absichern.
+    try:
+        df = get_data_for_ticker_and_range(ticker, start_date, end_date)
+    except Exception as exc:
+        logger.error(f"InfluxDB-Lesefehler nach Ingestion für {ticker}: {exc}", exc_info=True)
+        raise DataSourceError(
+            f"Marktdaten für '{ticker}' konnten nach dem Laden nicht gelesen werden."
+        ) from exc
+
     return df if df is not None else pd.DataFrame()
