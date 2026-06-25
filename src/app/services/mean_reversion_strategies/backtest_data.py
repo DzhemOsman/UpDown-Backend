@@ -24,13 +24,11 @@ def get_backtest_data(
     :param include_low: Boolean, ob ursprünglicher oder neuer Algorithmus
     :return: Wenn Daten geliefert werden ein DataFrame ansonsten None
     """
-    try:
-        df = fetch_ticker_data(ticker, start_date, end_date)
-    except Exception as e:
-        logger.error(f"Fehler beim Laden von {ticker}: {e}", exc_info=True)
-        return None
+    df = fetch_ticker_data(ticker, start_date, end_date)
 
     if df.empty:
+        # KEIN Infra-Fehler: Ticker existiert nicht / hat keine Daten im Zeitraum.
+        # None = "diesen Ticker überspringen" -> wichtig für Multi-Ticker-Optimierung.
         logger.warning(f"Keine Daten für Ticker: {ticker}")
         return None
 
@@ -38,17 +36,27 @@ def get_backtest_data(
         # InfluxDB liefert Zeitzonen mit, deshalb muss die Lokalisierung zuerst entfernt werden.
         df.index = pd.DatetimeIndex(df["time"]).tz_localize(None)
 
-        # Benötigte Spalten markieren für Extrahierung
         columns_to_keep = ["open", "high", "close"]
         if include_low:
             columns_to_keep.append("low")
 
         clean_df = df[columns_to_keep].copy()
+        clean_df = clean_df.sort_index()
 
-        # Fehlende Werte mit letztem bekannten Wert füllen und df nach Index sortieren
-        clean_df = clean_df.sort_index().ffill()
+        # Tage ohne handelbaren Kurs (NaN in einer Preisspalte) entfernen.
+        # Begruendung: Ein fehlender Kurs ist kein auffuellbarer Wert, sondern ein
+        # Tag, an dem real nicht gehandelt werden konnte. Wuerden wir ffill/bfill
+        # nutzen, erlaubten wir dem Backtest Trades zu erfundenen Preisen.
+        # dropna entfernt genau diese Zeilen -> die NumPy-Arrays im Hot-Loop
+        # enthalten danach garantiert keine NaN mehr.
+        clean_df = clean_df.dropna(subset=columns_to_keep)
+
+        if clean_df.empty:
+            # Nach dem Bereinigen blieb nichts uebrig -> wie "keine Daten" behandeln.
+            logger.warning(f"Keine handelbaren Kursdaten fuer Ticker {ticker} nach NaN-Bereinigung.")
+            return None
 
         return clean_df
-    except Exception as e:
+    except (KeyError, ValueError) as e:
         logger.error(f"Fehler beim Aufbereiten von {ticker}: {e}", exc_info=True)
         return None

@@ -69,20 +69,19 @@ def optimize_grid_search(
                 total_number_of_trades=n_trades
             )
 
-        if best_params is None or best_result is None or best_trades is None:
-            return None
+    if best_params is None or best_result is None or best_trades is None:
+        return None
 
-        equity_data = calculate_comparison_curves(best_trades, bot.get_cached_ticker_data(), initial_capital)
+    equity_data = calculate_comparison_curves(best_trades, bot.get_cached_ticker_data(), initial_capital)
 
-        return BestParameterCombinationDict(
-            best_drop_threshold=float(best_params['drop_threshold']),
-            best_hold_days=int(best_params['hold_days']),
-            best_take_profit_pct=float(best_params['take_profit_pct']),
-            total_profit=float(round(best_result['profit'], 2)),
-            roi_pct=float(round(best_roi, 2)),
-            win_rate=float(round(best_result['win_rate'], 2)),
-            total_number_of_trades=int(best_result['total_number_of_trades']),
-            equity_curve_data=equity_data,
-            trades=best_trades
-        )
-    return None
+    return BestParameterCombinationDict(
+        best_drop_threshold=float(best_params['drop_threshold']),
+        best_hold_days=int(best_params['hold_days']),
+        best_take_profit_pct=float(best_params['take_profit_pct']),
+        total_profit=float(round(best_result['profit'], 2)),
+        roi_pct=float(round(best_roi, 2)),
+        win_rate=float(round(best_result['win_rate'], 2)),
+        total_number_of_trades=int(best_result['total_number_of_trades']),
+        equity_curve_data=equity_data,
+        trades=best_trades
+    )

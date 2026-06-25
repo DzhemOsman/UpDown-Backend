@@ -53,10 +53,12 @@ class MeanReversionWithMoneyManagement:
         :param is_trend: Bool, ob Mean-Reversion mithilfe des SMA berechnet werden soll.
         :return: Liste der tatsächlich ausgeführten Transaktionen.
         """
-        if params['max_positions'] is None or params['allocation_pct'] is None:
-            raise ValueError(
-                "max_positions und allocation_pct müssen für Money Management gesetzt sein"
-            )
+        if (
+                params['max_positions'] is None
+                or params['allocation_pct'] is None
+                or params['stop_loss_pct'] is None
+        ):
+            raise ValueError("max_positions, allocation_pct und stop_loss_pct müssen für Money Management gesetzt sein")
 
         all_potential_trades = []
 
