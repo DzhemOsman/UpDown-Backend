@@ -5,20 +5,29 @@ from fastapi import APIRouter, HTTPException
 
 from app.schemas.api.best_strategy_response import BestStrategyResponse
 from app.schemas.api.optimization_request import (
-    OptimizationRequest,
     MoneyManagementOptimizationRequest,
+    OptimizationRequest,
 )
 from app.schemas.api.strategy_request import StrategyRequest
 from app.schemas.api.strategy_result import StrategyResult
-from app.schemas.internal.best_parameter_combination_dict import ParameterCombinationDict
+from app.schemas.internal.best_parameter_combination_dict import (
+    ParameterCombinationDict,
+)
 from app.services import market_data
-from app.services.mean_reversion_strategies.mean_reversion_defaults import DEFAULT_START, DEFAULT_END
-from app.services.mean_reversion_strategies.mean_reversion_strategy import MeanReversionStrategy
+from app.services.mean_reversion_strategies.mean_reversion_defaults import (
+    DEFAULT_END,
+    DEFAULT_START,
+)
+from app.services.mean_reversion_strategies.mean_reversion_strategy import (
+    MeanReversionStrategy,
+)
 from app.services.mean_reversion_strategies.money_management_optimizer import (
     optimize_money_management_with_grid_search,
     optimize_money_management_with_randomized_grid_search,
 )
-from app.services.mean_reversion_strategies.money_management_reversion import MeanReversionWithMoneyManagement
+from app.services.mean_reversion_strategies.money_management_reversion import (
+    MeanReversionWithMoneyManagement,
+)
 from app.services.mean_reversion_strategies.optimizer import optimize_grid_search
 
 router = APIRouter()
@@ -84,7 +93,9 @@ def get_money_management_result(request: StrategyRequest) -> StrategyResult:
 
 
 @router.post("/optimize/grid-search", response_model=BestStrategyResponse)
-def get_optimized_grid_search_strategy(request: OptimizationRequest) -> BestStrategyResponse:
+def get_optimized_grid_search_strategy(
+    request: OptimizationRequest,
+) -> BestStrategyResponse:
     result = optimize_grid_search(
         tickers=request.tickers,
         drop_options=request.drop_options,
@@ -97,9 +108,11 @@ def get_optimized_grid_search_strategy(request: OptimizationRequest) -> BestStra
     return _require_result(result)
 
 
-@router.post("/optimize/money-management/grid-search", response_model=BestStrategyResponse)
+@router.post(
+    "/optimize/money-management/grid-search", response_model=BestStrategyResponse
+)
 def get_optimized_strategy_with_money_management_and_grid_search(
-        request: MoneyManagementOptimizationRequest,
+    request: MoneyManagementOptimizationRequest,
 ) -> BestStrategyResponse:
     result = optimize_money_management_with_grid_search(
         tickers=request.tickers,
@@ -118,9 +131,12 @@ def get_optimized_strategy_with_money_management_and_grid_search(
     return _require_result(result)
 
 
-@router.post("/optimize/money-management/randomized-grid-search", response_model=BestStrategyResponse)
+@router.post(
+    "/optimize/money-management/randomized-grid-search",
+    response_model=BestStrategyResponse,
+)
 def get_optimized_strategy_with_money_management_and_randomized_grid_search(
-        request: MoneyManagementOptimizationRequest,
+    request: MoneyManagementOptimizationRequest,
 ) -> BestStrategyResponse:
     result = optimize_money_management_with_randomized_grid_search(
         tickers=request.tickers,
@@ -142,9 +158,9 @@ def get_optimized_strategy_with_money_management_and_randomized_grid_search(
 
 @router.get("/chart/{ticker}")
 def get_chart_data(
-        ticker: str,
-        start_date: datetime = DEFAULT_START,
-        end_date: datetime = DEFAULT_END,
+    ticker: str,
+    start_date: datetime = DEFAULT_START,
+    end_date: datetime = DEFAULT_END,
 ):
     df = market_data.fetch_ticker_data(ticker, start_date, end_date)
     if df is None or df.empty:
@@ -154,7 +170,7 @@ def get_chart_data(
 
     return [
         {
-            "date": row.Index.strftime('%Y-%m-%d'),
+            "date": row.Index.strftime("%Y-%m-%d"),
             "open": float(round(row.open, 2)),
             "high": float(round(row.high, 2)),
             "low": float(round(row.low, 2)),

@@ -1,12 +1,14 @@
 import logging
 import pickle
-import pandas as pd
+
 import numpy as np
 
 # --- IMPORTE ---
-from app.ml.train import prepare_multi_asset_dataset, MODEL_PATH
+from app.ml.train import MODEL_PATH, prepare_multi_asset_dataset
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +32,8 @@ def run_backtest():
     # Da wir für die Features die echten Kurse gedroppt haben, holen wir uns hier
     # die 'future_return_20d' direkt über die mathematische Definition unseres Targets.
     # Wenn y_test (das echte Target) eintritt, gab es >= 5% Rendite.
-    # Um es extrem realistisch zu machen, nutzen wir einen Näherungswert für die echten Renditen.
+    # Um es extrem realistisch zu machen, nutzen wir einen Näherungswert
+    # für die echten Renditen.
 
     logger.info("📊 Simuliere Trades im Zeitraum 2021 bis 2026...")
 
@@ -40,15 +43,19 @@ def run_backtest():
         if predictions[i] == 1:
             # Das Modell hat einen Trend vermutet.
             # Wir nehmen das echte Ergebnis dieser Aktie über die nächsten 20 Tage.
-            # Da wir die exakte Rendite nicht im X_test haben, simulieren wir den Erwartungswert:
-            # Wenn das Target 1 war, gab es im Schnitt +7.5% Gewinn, bei 0 gab es im Schnitt -3.5% Verlust.
+            # Da wir die exakte Rendite nicht im X_test haben,
+            # simulieren wir den Erwartungswert:
+            # Wenn das Target 1 war, gab es im Schnitt +7.5% Gewinn,
+            # bei 0 gab es im Schnitt -3.5% Verlust.
             if y_test.iloc[i] == 1:
                 trade_returns.append(0.075)  # Erfolgreicher Trend-Trade
             else:
                 trade_returns.append(-0.035)  # Fehlsignal (Kapitalverlust)
 
     if len(trade_returns) == 0:
-        logger.warning("Die KI hat im gesamten Testzeitraum kein einziges Signal gegeben!")
+        logger.warning(
+            "Die KI hat im gesamten Testzeitraum kein einziges Signal gegeben!"
+        )
         return
 
     # 5. Realistische Auswertung der Performance
@@ -65,7 +72,9 @@ def run_backtest():
     anzahl_jahre = 5.3  # Zeitraum von Jan 2021 bis Mai 2026
 
     # Wir berechnen die durchschnittliche Rendite pro Jahr (geometrisch geschätzt)
-    simulierte_jahresrendite = (avg_return_per_trade * 252 / 20)  # 252 Handelstage geteilt durch Haltedauer
+    simulierte_jahresrendite = (
+        avg_return_per_trade * 252 / 20
+    )  # 252 Handelstage geteilt durch Haltedauer
 
     start_capital = 10000.0
     # Endkapital basierend auf einer realistischen jährlichen Rendite
@@ -82,6 +91,7 @@ def run_backtest():
     logger.info(f"Realistisches Endkapital:  {current_capital:,.2f} $")
     logger.info(f"Gesamtrendite Strategie:   {total_return_pct:.2%}")
     logger.info("==============================================")
+
 
 if __name__ == "__main__":
     env_setter = 'Please ensure $env:PYTHONPATH="src" is set before running'

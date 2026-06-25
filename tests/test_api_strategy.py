@@ -1,8 +1,7 @@
-import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
 from app.api.v1.endpoints import strategy as strategy_endpoint
+from app.main import app
 
 # Kein "with" → lifespan läuft NICHT → kein InfluxDB-Verbindungsversuch beim Start.
 client = TestClient(app)
@@ -64,7 +63,9 @@ def test_mean_reversion_rejects_invalid_drop_option():
     KEIN Mock nötig: Die Validierung greift VOR dem Endpoint-Code, die DB
     wird nie angefasst.
     """
-    response = client.post("/v1/strategy/mean-reversion", json=_valid_body(drop_option=0))
+    response = client.post(
+        "/v1/strategy/mean-reversion", json=_valid_body(drop_option=0)
+    )
 
     assert response.status_code == 422
 

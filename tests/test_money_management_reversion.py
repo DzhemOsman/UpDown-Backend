@@ -1,6 +1,8 @@
 import pytest
 
-from app.schemas.internal.best_parameter_combination_dict import ParameterCombinationDict
+from app.schemas.internal.best_parameter_combination_dict import (
+    ParameterCombinationDict,
+)
 from app.services.mean_reversion_strategies.money_management_reversion import (
     MeanReversionWithMoneyManagement,
 )
@@ -37,9 +39,14 @@ def _trade(buy_date: str, sell_date: str, profit_pct: float) -> dict:
 
 def _params_mm(**overrides) -> ParameterCombinationDict:
     base = dict(
-        drop_threshold=5, lookback_days=1, hold_days=5,
-        take_profit_pct=5, fee_pct=0.0,
-        stop_loss_pct=10.0, max_positions=1, allocation_pct=100.0,
+        drop_threshold=5,
+        lookback_days=1,
+        hold_days=5,
+        take_profit_pct=5,
+        fee_pct=0.0,
+        stop_loss_pct=10.0,
+        max_positions=1,
+        allocation_pct=100.0,
     )
     base.update(overrides)
     return ParameterCombinationDict(**base)
@@ -54,13 +61,20 @@ def test_entry_day_spike_does_not_take_profit(make_ohlc_df):
     IGNORIERT. Der Trade läuft weiter und schliesst per Time Stop im Minus.
     Genau dieses Verhalten ist der Verdacht hinter den negativen Trades.
     """
-    df = make_ohlc_df([
-        (100, 100, 100, 100),
-        (90, 92, 88, 90),  # -10 % -> Signal (idx=1)
-        (90, 100, 89, 91),  # Einstieg (i=0): High 100 → wäre Take Profit, wird ignoriert
-        (91, 92, 89, 90),  # i=1
-        (90, 91, 86, 88),  # i=2 = letzter Haltetag -> Time Stop @ close 88
-    ])
+    df = make_ohlc_df(
+        [
+            (100, 100, 100, 100),
+            (90, 92, 88, 90),  # -10 % -> Signal (idx=1)
+            (
+                90,
+                100,
+                89,
+                91,
+            ),  # Einstieg (i=0): High 100 → wäre Take Profit, wird ignoriert
+            (91, 92, 89, 90),  # i=1
+            (90, 91, 86, 88),  # i=2 = letzter Haltetag -> Time Stop @ close 88
+        ]
+    )
 
     trades = _backtest_single(
         df,
@@ -88,13 +102,15 @@ def test_stop_loss_exit(make_ohlc_df):
     Low auf 85. Da der Open (89) NICHT unter dem Stop liegt, wird zum Stop-Preis
     85.5 verkauft (nicht zum schlechteren Open).
     """
-    df = make_ohlc_df([
-        (100, 100, 100, 100),
-        (90, 92, 88, 90),  # Signal
-        (90, 91, 89, 90),  # Einstieg (i=0)
-        (89, 90, 85, 86),  # i=1: Low 85 <= Stop 85.5 -> Stop Loss @ 85.5
-        (86, 87, 85, 86),
-    ])
+    df = make_ohlc_df(
+        [
+            (100, 100, 100, 100),
+            (90, 92, 88, 90),  # Signal
+            (90, 91, 89, 90),  # Einstieg (i=0)
+            (89, 90, 85, 86),  # i=1: Low 85 <= Stop 85.5 -> Stop Loss @ 85.5
+            (86, 87, 85, 86),
+        ]
+    )
 
     trades = _backtest_single(
         df,
@@ -147,7 +163,9 @@ def test_max_positions_blocks_overlapping_trade():
 
     potential = [
         _trade("2020-01-01", "2020-01-10", profit_pct=10.0),  # läuft bis 10.01.
-        _trade("2020-01-05", "2020-01-15", profit_pct=10.0),  # startet WÄHREND Trade 1 läuft
+        _trade(
+            "2020-01-05", "2020-01-15", profit_pct=10.0
+        ),  # startet WÄHREND Trade 1 läuft
     ]
     # Inneren Backtest durch die kontrollierten Trades ersetzen → wir testen
     # NUR die Orchestrierung, keine Marktdaten, keine DB.
@@ -158,7 +176,9 @@ def test_max_positions_blocks_overlapping_trade():
     )
 
     assert len(executed) == 1
-    assert executed[0]["buy_date"] == "2020-01-01"  # nur der erste, früher startende Trade
+    assert (
+        executed[0]["buy_date"] == "2020-01-01"
+    )  # nur der erste, früher startende Trade
 
 
 def test_capital_release_enables_compounding():

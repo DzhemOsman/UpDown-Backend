@@ -30,8 +30,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.exception_handler(DataSourceError)
-async def data_source_error_handler(request: Request, exc: DataSourceError) -> JSONResponse:
+async def data_source_error_handler(
+    request: Request, exc: DataSourceError
+) -> JSONResponse:
     """
     Externe Datenquelle (InfluxDB/Yahoo Finance) nicht erreichbar.
     -> 503 Service Unavailable: Das Problem liegt NICHT beim Client-Request,
@@ -48,6 +51,7 @@ async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse
     ok, aber semantisch nicht verarbeitbar.
     """
     return JSONResponse(status_code=422, content={"detail": str(exc)})
+
 
 @app.get("/health", tags=["System"])
 def health() -> dict[str, str]:

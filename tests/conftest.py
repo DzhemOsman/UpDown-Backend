@@ -1,7 +1,7 @@
+import os
+
 import pandas as pd
 import pytest
-
-import os
 
 # Dummy-Settings, damit "import app.main" nicht an fehlenden Env-Vars scheitert.
 # setdefault → überschreibt KEINE echten lokalen Werte in der .env.
@@ -18,7 +18,9 @@ def make_ohlc_df():
     Aufruf im Test:
         df = make_ohlc_df([(100, 100, 100, 100), (90, 92, 88, 90)])
     """
+
     def _factory(rows: list[tuple[float, float, float, float]]) -> pd.DataFrame:
         index = pd.date_range(start="2020-01-01", periods=len(rows), freq="B")
         return pd.DataFrame(rows, columns=["open", "high", "low", "close"], index=index)
+
     return _factory

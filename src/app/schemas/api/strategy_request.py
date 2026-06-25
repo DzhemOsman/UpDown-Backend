@@ -4,11 +4,11 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.services.mean_reversion_strategies.mean_reversion_defaults import (
-    DEFAULT_START,
     DEFAULT_END,
-    DEFAULT_INITIAL_CAPITAL,
     DEFAULT_FEE_RATE,
-    DEFAULT_N_TRIALS
+    DEFAULT_INITIAL_CAPITAL,
+    DEFAULT_N_TRIALS,
+    DEFAULT_START,
 )
 
 

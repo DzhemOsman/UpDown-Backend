@@ -19,22 +19,27 @@ def write_points(points: list[Point]) -> None:
 
 
 def _build_ticker_query(ticker, start_str, end_str) -> tuple[str, dict]:
-    sql = f"SELECT * FROM '{MEASUREMENT}' WHERE ticker = $ticker AND time >= $start AND time <= $end ORDER BY time"
+    sql = (
+        f"SELECT * FROM '{MEASUREMENT}' WHERE ticker = $ticker "
+        f"AND time >= $start AND time <= $end ORDER BY time"
+    )
     return sql, {"ticker": ticker, "start": start_str, "end": end_str}
 
 
 def get_data_for_ticker_and_range(
-        ticker: str,
-        start_date: datetime,
-        end_date: datetime,
+    ticker: str,
+    start_date: datetime,
+    end_date: datetime,
 ) -> pd.DataFrame:
     """
-    Liest Daten für angeforderten Ticker aus der Datenbank, die im angegebenen Zeitraum liegen.
+    Liest Daten für angeforderten Ticker aus der Datenbank, die im angegebenen
+    Zeitraum liegen.
 
     :param ticker: Ticker-Symbol, welches geladen werden soll z.B.: 'PLTR'
     :param start_date: Datum, ab wann Daten gelesen werden sollen
     :param end_date: Datum, bis wann Daten gelesen werden sollen
-    :return: Wenn Daten erfolgreich gelesen, gefülltes DataFrame ansonsten leeres DataFrame
+    :return: Wenn Daten erfolgreich gelesen, gefülltes DataFrame
+    ansonsten leeres DataFrame
     """
     client = get_client()
 

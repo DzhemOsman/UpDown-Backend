@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+
 import pandas as pd
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +31,13 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     # 2. Trend-Indikatoren (SMA & relatives Verhältnis zum Kurs)
     # ---------------------------------------------------------
     for window in [10, 20, 50]:
-        features_df[f"sma_{window}"] = features_df["close"].rolling(window=window).mean()
+        features_df[f"sma_{window}"] = (
+            features_df["close"].rolling(window=window).mean()
+        )
         # Relatives Verhältnis: Wie weit ist der Kurs prozentual vom SMA entfernt?
-        features_df[f"close_to_sma_{window}"] = features_df["close"] / features_df[f"sma_{window}"]
+        features_df[f"close_to_sma_{window}"] = (
+            features_df["close"] / features_df[f"sma_{window}"]
+        )
 
     # ---------------------------------------------------------
     # 3. Mean-Reversion: RSI (Relative Strength Index - 14 Tage)
@@ -49,9 +53,8 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     features_df["bollinger_std"] = features_df["close"].rolling(window=20).std()
     # Position im Band: Wo steht der Kurs relativ zu den Bändern?
     features_df["bollinger_position"] = (
-            (features_df["close"] - features_df["bollinger_mid"])
-            / (2 * features_df["bollinger_std"] + 1e-9)
-    )
+        features_df["close"] - features_df["bollinger_mid"]
+    ) / (2 * features_df["bollinger_std"] + 1e-9)
 
     # ---------------------------------------------------------
     # 5. Volatilität (Standardabweichung der täglichen Renditen)
@@ -62,12 +65,16 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     # 6. Volumen-Features (Aktuelles Volumen relativ zum 20-Tage-Schnitt)
     # ---------------------------------------------------------
     features_df["volume_sma_20"] = features_df["volume"].rolling(window=20).mean()
-    features_df["volume_ratio"] = features_df["volume"] / (features_df["volume_sma_20"] + 1e-9)
+    features_df["volume_ratio"] = features_df["volume"] / (
+        features_df["volume_sma_20"] + 1e-9
+    )
 
     # ---------------------------------------------------------
     # Bereinigung: Zeilen mit NaN-Werten löschen (entstehen durch rollierende Fenster)
     # ---------------------------------------------------------
     features_df = features_df.dropna()
 
-    logger.info(f"Feature-Engineering abgeschlossen. {features_df.shape[1]} Spalten generiert.")
+    logger.info(
+        f"Feature-Engineering abgeschlossen. {features_df.shape[1]} Spalten generiert."
+    )
     return features_df

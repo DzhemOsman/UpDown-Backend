@@ -3,18 +3,21 @@ from __future__ import annotations
 import logging
 import os
 import pickle
+
 import pandas as pd
-import numpy as np
 from lightgbm import LGBMClassifier
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import accuracy_score, classification_report
+
+from app.ml.bulk_ingest import get_diversified_200_tickers
+from app.repositories.influx_repository import get_data_for_ticker_and_range
 
 # --- EIGENE IMPORTE ---
 from app.services.feature_engineering import build_features
-from app.repositories.influx_repository import get_data_for_ticker_and_range
-from app.services.ingestion import DEFAULT_START, DEFAULT_END
-from app.ml.bulk_ingest import get_diversified_200_tickers
+from app.services.ingestion import DEFAULT_END, DEFAULT_START
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 MARKET_INDEX = "^GSPC"  # S&P 500 als Benchmark
@@ -28,14 +31,14 @@ MODEL_PATH = os.path.join(MODEL_DIR, "lgbm_trend_diversified.pkl")
 
 
 def load_data_from_influx(ticker: str) -> pd.DataFrame:
-    """ Lädt Rohdaten aus InfluxDB und bereitet den Index vor. """
+    """Lädt Rohdaten aus InfluxDB und bereitet den Index vor."""
     df = get_data_for_ticker_and_range(ticker, DEFAULT_START, DEFAULT_END)
     if df.empty:
         raise ValueError(f"Keine Daten für Ticker {ticker} gefunden.")
 
-    if 'time' in df.columns:
-        df['time'] = pd.to_datetime(df['time'])
-        df.set_index('time', inplace=True)
+    if "time" in df.columns:
+        df["time"] = pd.to_datetime(df["time"])
+        df.set_index("time", inplace=True)
 
     df.columns = [col.lower() for col in df.columns]
     df = df.sort_index()
@@ -50,7 +53,8 @@ def prepare_multi_asset_dataset() -> tuple[pd.DataFrame, pd.Series]:
     # 1. Dynamische Tickerliste von Wikipedia holen (US-Teil)
     try:
         all_tickers = get_diversified_200_tickers()
-        # Nur US-Ticker filtern (die ohne "-DE" Suffix), da wir die EU-Daten bewusst weglassen
+        # Nur US-Ticker filtern (die ohne "-DE" Suffix), da wir die EU-Daten
+        # bewusst weglassen
         tickers = [t for t in all_tickers if "-DE" not in t]
     except Exception as e:
         logger.warning(f"Konnte dynamische Ticker nicht laden, nutze Fallback: {e}")
@@ -79,7 +83,9 @@ def prepare_multi_asset_dataset() -> tuple[pd.DataFrame, pd.Series]:
             df_features = df_features.join(vix_close, how="inner")
 
             # Akademischer Proxy für relative Bewertung (Abstand zum 250-Tage-Hoch)
-            df_features["dist_to_250d_high"] = df_features["close"] / df_features["close"].rolling(250).max()
+            df_features["dist_to_250d_high"] = (
+                df_features["close"] / df_features["close"].rolling(250).max()
+            )
 
             # Target erstellen (20 Tage in die Zukunft, > 5% Gewinn)
             future_return = df_features["close"].pct_change(HORIZON_N).shift(-HORIZON_N)
@@ -92,16 +98,28 @@ def prepare_multi_asset_dataset() -> tuple[pd.DataFrame, pd.Series]:
             y_asset = target.loc[valid_indices]
 
             # Unwichtige Rohdatenspalten droppen
-            columns_to_drop = ["ticker", "open", "high", "low", "close", "volume", "bollinger_mid", "bollinger_std",
-                               "volume_sma_20"]
-            X_asset = X_asset.drop(columns=[col for col in columns_to_drop if col in X_asset.columns])
+            columns_to_drop = [
+                "ticker",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "bollinger_mid",
+                "bollinger_std",
+                "volume_sma_20",
+            ]
+            X_asset = X_asset.drop(
+                columns=[col for col in columns_to_drop if col in X_asset.columns]
+            )
 
             all_features.append(X_asset)
             all_targets.append(y_asset)
             logger.info(f"💾 Ticker erfolgreich verarbeitet und gestapelt: {ticker}")
 
-        except Exception as e:
-            # Deutsche Aktien oder fehlende Ticker werden hier einfach sauber übersprungen
+        except Exception:
+            # Deutsche Aktien oder fehlende Ticker werden hier einfach sauber
+            # übersprungen
             continue
 
     if not all_features:
@@ -115,7 +133,7 @@ def prepare_multi_asset_dataset() -> tuple[pd.DataFrame, pd.Series]:
 
 
 def train_model():
-    """ Trainiert das diversifizierte Multi-Asset-Modell. """
+    """Trainiert das diversifizierte Multi-Asset-Modell."""
     logger.info("⏳ Starte Laden und Verarbeiten des Multi-Asset-Datensatzes...")
     X, y = prepare_multi_asset_dataset()
 
@@ -130,11 +148,7 @@ def train_model():
     # 6. LightGBM trainieren
     logger.info("🚀 Starte LightGBM Multi-Asset-Modelltraining...")
     model = LGBMClassifier(
-        n_estimators=150,
-        learning_rate=0.03,
-        max_depth=6,
-        random_state=42,
-        verbose=-1
+        n_estimators=150, learning_rate=0.03, max_depth=6, random_state=42, verbose=-1
     )
 
     model.fit(X_train, y_train)
@@ -152,7 +166,9 @@ def train_model():
     with open(MODEL_PATH, "wb") as f:
         pickle.dump(model, f)
 
-    logger.info(f"🎉 Erfolg! Das diversifizierte Modell wurde unter '{MODEL_PATH}' gesichert.")
+    logger.info(
+        f"🎉 Erfolg! Das diversifizierte Modell wurde unter '{MODEL_PATH}' gesichert."
+    )
 
 
 if __name__ == "__main__":
