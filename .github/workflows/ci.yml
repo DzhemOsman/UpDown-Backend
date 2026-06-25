@@ -1,6 +1,9 @@
 name: CI
 
 on:
+  push:
+    branches:
+      - master
   pull_request:
     branches:
       - master
@@ -31,3 +34,21 @@ jobs:
 
       - name: Run tests
         run: pytest
+        
+  deploy:
+    needs: quality
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GCP VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USER }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          script: |
+            cd ~/updown-backend
+            git pull origin master
+            docker network inspect updown-net >/dev/null 2>&1 || docker network create updown-net
+            docker network connect updown-net influxdb3 2>/dev/null || true
+            docker compose -f docker-compose.prod.yml up -d --build
