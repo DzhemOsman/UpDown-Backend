@@ -26,7 +26,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="UpDown Backend", version="0.1.0", lifespan=lifespan)
 
-
 # --- CORS ERWEITERUNG ---
 # Wir laden deine bestehenden Origins und fügen die Standard-Entwicklungs-Ports
 # hinzu, falls sie fehlen. Das verhindert CORS-Blockaden beim Testen.
@@ -51,7 +50,7 @@ app.add_middleware(
 
 @app.exception_handler(DataSourceError)
 async def data_source_error_handler(
-    request: Request, exc: DataSourceError
+        request: Request, exc: DataSourceError
 ) -> JSONResponse:
     """
     Externe Datenquelle (InfluxDB/Yahoo Finance) nicht erreichbar.
