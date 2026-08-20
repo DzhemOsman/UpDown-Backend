@@ -4,14 +4,14 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+# --- NEUER IMPORT FÜR ML ---
+from app.api.v1.endpoints import backtest_ml
+
 # --- BESTEHENDE IMPORTS ---
 from app.api.v1.router import api_router
 from app.config import get_settings
 from app.core.exceptions import DataSourceError
 from app.core.influx import get_client
-
-# --- NEUER IMPORT FÜR ML ---
-from app.api.v1.endpoints import backtest_ml
 
 
 @asynccontextmanager

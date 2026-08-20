@@ -1,14 +1,15 @@
 import logging
 import os
 import pickle
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, classification_report
+from torch.utils.data import DataLoader
 
 # --- EIGENE IMPORTE ---
-from app.ml.dataset import build_tensor_dataset, MarketDataset
+from app.ml.dataset import MarketDataset, build_tensor_dataset
 from app.ml.model import MarketLSTM
 
 logging.basicConfig(
@@ -123,7 +124,8 @@ def train_model():
 
         # Logging von Loss UND Trainings-Accuracy
         logger.info(
-            f"Epoche [{epoch:02d}/{EPOCHS}] - Loss: {avg_loss:.4f} | Train Acc: {train_acc:.2%}"
+            f"Epoche [{epoch:02d}/{EPOCHS}] - Loss: {avg_loss:.4f} "
+            f"| Train Acc: {train_acc:.2%}"
         )
 
     # ==========================

@@ -1,13 +1,13 @@
 import logging
 import os
 import pickle
-import numpy as np
-import pandas as pd
+
 import torch
+
+from app.ml.dataset import MARKET_INDEX, SEQ_LEN, VIX_INDEX, load_raw_influx
 
 # --- EIGENE IMPORTE ---
 from app.ml.model import MarketLSTM
-from app.ml.dataset import load_raw_influx, MARKET_INDEX, VIX_INDEX, SEQ_LEN
 from app.services.feature_engineering import build_features
 
 logging.basicConfig(
@@ -32,7 +32,8 @@ def get_device() -> torch.device:
 
 
 def predict_ticker(ticker: str):
-    """Macht eine Vorhersage für eine einzelne Aktie basierend auf den letzten 60 Tagen."""
+    """Macht eine Vorhersage für eine einzelne Aktie basierend
+    auf den letzten 60 Tagen."""
     device = get_device()
 
     # 1. Prüfen, ob Modell und Scaler existieren
@@ -63,7 +64,8 @@ def predict_ticker(ticker: str):
     df_target = load_raw_influx(ticker)
     if df_target.empty or len(df_target) < 250 + SEQ_LEN:
         logger.error(
-            f"Nicht genug Historie für {ticker} (Mindestens 310 Tage nötig für Indikatoren)."
+            f"Nicht genug Historie für {ticker} "
+            f"(Mindestens 310 Tage nötig für Indikatoren)."
         )
         return
 
@@ -94,7 +96,8 @@ def predict_ticker(ticker: str):
 
     if len(X_df) < SEQ_LEN:
         logger.error(
-            f"Nach Bereinigung der NaNs bleiben für {ticker} weniger als {SEQ_LEN} Tage übrig."
+            f"Nach Bereinigung der NaNs bleiben für {ticker} "
+            f"weniger als {SEQ_LEN} Tage übrig."
         )
         return
 
