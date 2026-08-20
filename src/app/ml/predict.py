@@ -37,7 +37,9 @@ def predict_ticker(ticker: str):
 
     # 1. Prüfen, ob Modell und Scaler existieren
     if not os.path.exists(MODEL_PATH) or not os.path.exists(SCALER_PATH):
-        logger.error("Modell oder Scaler nicht gefunden! Bitte trainiere das Modell zuerst.")
+        logger.error(
+            "Modell oder Scaler nicht gefunden! Bitte trainiere das Modell zuerst."
+        )
         return
 
     # 2. Scaler laden
@@ -49,7 +51,9 @@ def predict_ticker(ticker: str):
     df_market = load_raw_influx(MARKET_INDEX)
     df_vix = load_raw_influx(VIX_INDEX)
     if df_market.empty or df_vix.empty:
-        logger.error("Fehler: Globale Marktdaten (^GSPC oder ^VIX) fehlen in der InfluxDB.")
+        logger.error(
+            "Fehler: Globale Marktdaten (^GSPC oder ^VIX) fehlen in der InfluxDB."
+        )
         return
 
     market_returns = df_market["close"].pct_change(1).rename("market_return_1d")
@@ -58,25 +62,40 @@ def predict_ticker(ticker: str):
     # 4. Ticker-Daten laden und Features bauen (Exakt wie in dataset.py)
     df_target = load_raw_influx(ticker)
     if df_target.empty or len(df_target) < 250 + SEQ_LEN:
-        logger.error(f"Nicht genug Historie für {ticker} (Mindestens 310 Tage nötig für Indikatoren).")
+        logger.error(
+            f"Nicht genug Historie für {ticker} (Mindestens 310 Tage nötig für Indikatoren)."
+        )
         return
 
     df_feat = build_features(df_target)
     df_feat = df_feat.join(market_returns, how="inner").join(vix_close, how="inner")
 
     # 250-Tage Hoch berechnen (Verursacht NaNs in den ersten 249 Tagen)
-    df_feat["dist_to_250d_high"] = df_feat["close"] / df_feat["close"].rolling(250).max()
+    df_feat["dist_to_250d_high"] = (
+        df_feat["close"] / df_feat["close"].rolling(250).max()
+    )
 
     # Unwichtige Spalten droppen
-    cols_to_drop = ["ticker", "open", "high", "low", "close", "volume",
-                    "bollinger_mid", "bollinger_std", "volume_sma_20"]
+    cols_to_drop = [
+        "ticker",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+        "bollinger_mid",
+        "bollinger_std",
+        "volume_sma_20",
+    ]
     X_df = df_feat.drop(columns=[c for c in cols_to_drop if c in df_feat.columns])
 
     # NaNs entfernen (Die ersten ~250 Tage fliegen hier raus)
     X_df = X_df.dropna()
 
     if len(X_df) < SEQ_LEN:
-        logger.error(f"Nach Bereinigung der NaNs bleiben für {ticker} weniger als {SEQ_LEN} Tage übrig.")
+        logger.error(
+            f"Nach Bereinigung der NaNs bleiben für {ticker} weniger als {SEQ_LEN} Tage übrig."
+        )
         return
 
     # 5. Wir brauchen nur die allerletzten 60 Tage für die Live-Prognose!
@@ -94,7 +113,7 @@ def predict_ticker(ticker: str):
         input_size=X_tensor.shape[-1],
         hidden_size=HIDDEN_SIZE,
         num_layers=NUM_LAYERS,
-        dropout_rate=0.0  # Beim Vorhersagen brauchen wir keinen Dropout
+        dropout_rate=0.0,  # Beim Vorhersagen brauchen wir keinen Dropout
     ).to(device)
 
     model.load_state_dict(torch.load(MODEL_PATH, map_location=device))

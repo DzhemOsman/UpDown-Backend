@@ -34,7 +34,11 @@ if isinstance(cors_origins, str):
     # Falls Pydantic es als String lädt
     cors_origins = [cors_origins]
 
-additional_origins = ["http://localhost:5173", "http://localhost:8080", "http://127.0.0.1:5173"]
+additional_origins = [
+    "http://localhost:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:5173",
+]
 for origin in additional_origins:
     if origin not in cors_origins:
         cors_origins.append(origin)
@@ -50,7 +54,7 @@ app.add_middleware(
 
 @app.exception_handler(DataSourceError)
 async def data_source_error_handler(
-        request: Request, exc: DataSourceError
+    request: Request, exc: DataSourceError
 ) -> JSONResponse:
     """
     Externe Datenquelle (InfluxDB/Yahoo Finance) nicht erreichbar.
@@ -81,4 +85,6 @@ def health() -> dict[str, str]:
 app.include_router(api_router, prefix="/v1")
 
 # 2. NEU: Der isolierte Unified Backtest Router für LSTM und LightGBM
-app.include_router(backtest_ml.router, prefix="/v1/strategy/backtest", tags=["Unified Backtest"])
+app.include_router(
+    backtest_ml.router, prefix="/v1/strategy/backtest", tags=["Unified Backtest"]
+)

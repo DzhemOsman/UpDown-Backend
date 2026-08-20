@@ -9,11 +9,11 @@ class MarketLSTM(nn.Module):
     """
 
     def __init__(
-            self,
-            input_size: int = 24,
-            hidden_size: int = 64,
-            num_layers: int = 2,
-            dropout_rate: int | float = 0.2
+        self,
+        input_size: int = 24,
+        hidden_size: int = 64,
+        num_layers: int = 2,
+        dropout_rate: int | float = 0.2,
     ):
         super(MarketLSTM, self).__init__()
         self.hidden_size = hidden_size
@@ -26,7 +26,7 @@ class MarketLSTM(nn.Module):
             hidden_size=hidden_size,
             num_layers=num_layers,
             batch_first=True,
-            dropout=dropout_rate if num_layers > 1 else 0.0
+            dropout=dropout_rate if num_layers > 1 else 0.0,
         )
 
         # Regularisierungsschicht gegen Overfitting

@@ -56,7 +56,9 @@ def train_model():
     test_dataset = MarketDataset(X_test_t, y_test_t)
 
     # 3. DataLoaders konfigurieren
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
+    train_loader = DataLoader(
+        train_dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True
+    )
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     # ==========================
@@ -70,7 +72,7 @@ def train_model():
         input_size=X_train_t.shape[-1],
         hidden_size=HIDDEN_SIZE,
         num_layers=NUM_LAYERS,
-        dropout_rate=DROPOUT
+        dropout_rate=DROPOUT,
     ).to(device)
 
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
@@ -120,7 +122,9 @@ def train_model():
         train_acc = correct_train / total_train
 
         # Logging von Loss UND Trainings-Accuracy
-        logger.info(f"Epoche [{epoch:02d}/{EPOCHS}] - Loss: {avg_loss:.4f} | Train Acc: {train_acc:.2%}")
+        logger.info(
+            f"Epoche [{epoch:02d}/{EPOCHS}] - Loss: {avg_loss:.4f} | Train Acc: {train_acc:.2%}"
+        )
 
     # ==========================
     # 6. EVALUIERUNG
