@@ -1,7 +1,9 @@
 import io
 import logging
+import ssl
 import urllib.request
 
+import certifi
 import pandas as pd
 
 from app.services.ingestion import ingest_all
@@ -25,10 +27,15 @@ def get_diversified_200_tickers() -> list[str]:
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
+    # certifi statt dem System-Zertifikatsspeicher nutzen - manche lokalen/
+    # Firmen-Zertifikatsketten scheitern sonst an CERTIFICATE_VERIFY_FAILED
+    # und der Aufruf fällt sonst auf die 5-Ticker-Notliste zurück.
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+
     # 1. S&P 500 laden
     sp500_url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
     req_sp500 = urllib.request.Request(sp500_url, headers=headers)
-    with urllib.request.urlopen(req_sp500) as response:
+    with urllib.request.urlopen(req_sp500, context=ssl_context) as response:
         html_text = response.read().decode("utf-8")
         sp500_table = pd.read_html(io.StringIO(html_text), flavor="html5lib")[0]
     us_tickers = sp500_table["Symbol"].tolist()
@@ -36,7 +43,7 @@ def get_diversified_200_tickers() -> list[str]:
     # 2. DAX laden
     dax_url = "https://en.wikipedia.org/wiki/DAX"
     req_dax = urllib.request.Request(dax_url, headers=headers)
-    with urllib.request.urlopen(req_dax) as response:
+    with urllib.request.urlopen(req_dax, context=ssl_context) as response:
         html_text = response.read().decode("utf-8")
         dax_table = pd.read_html(io.StringIO(html_text), flavor="html5lib")[4]
     de_tickers = dax_table["Ticker"].tolist()
