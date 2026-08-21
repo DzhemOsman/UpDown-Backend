@@ -99,3 +99,27 @@ Starte den Entwicklungsserver mit Uvicorn:
 uvicorn app.main:app --reload --app-dir src
 ```
 Das Backend ist nun unter http://localhost:8000 erreichbar. Die interaktive API-Dokumentation (Swagger UI) findest du unter http://localhost:8000/docs.
+
+---
+
+## ML-Modelle lokal regenerieren
+
+Die trainierten Modelle (`models/*.pkl`, `*.pth`, `*.json`) sind **nicht** Teil des Git-Repos (siehe `.gitignore`) - jede:r trainiert sie lokal selbst. Reihenfolge:
+
+1. **Diversifiziertes Ticker-Universum + Marktkontext in InfluxDB laden** (S&P 500 + DAX, ^GSPC, ^VIX - einmalig bzw. bei Bedarf erneut, dauert je nach Internetverbindung mehrere Minuten):
+   ```bash
+   $env:PYTHONPATH="src"
+   python -m app.ml.bulk_ingest
+   ```
+2. **LightGBM trainieren** (Walk-Forward-Validierung über mehrere Marktregime + finales Produktivmodell + `models/lgbm_trend_diversified.meta.json` mit datengetriebenem Inferenz-Threshold):
+   ```bash
+   $env:PYTHONPATH="src"
+   python -m app.ml.train_lgbm
+   ```
+3. **Optional: LSTM trainieren** (aktuell noch mit einem statischen 80/20-Split, Walk-Forward folgt später nach demselben Muster wie LightGBM):
+   ```bash
+   $env:PYTHONPATH="src"
+   python -m app.ml.train
+   ```
+
+Empfehlung: Retraining alle paar Monate wiederholen, damit die Modelle nicht auf einem veralteten Marktstand "einfrieren" (siehe `recommended_threshold`/`data_end` in der jeweiligen `*.meta.json` sowie die Staleness-Warnung im Backend-Log, wenn ein Backtest-Zeitraum deutlich über das Trainingsende hinausgeht).

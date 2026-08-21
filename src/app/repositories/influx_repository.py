@@ -18,6 +18,25 @@ def write_points(points: list[Point]) -> None:
     client.write(record=points)
 
 
+def get_ingested_tickers() -> list[str]:
+    """Liest alle Ticker-Symbole, für die bereits Daten in InfluxDB liegen.
+
+    Dient als robuster Fallback für Trainingsskripte, wenn externe
+    Ticker-Quellen (z.B. Wikipedia in bulk_ingest.py) nicht erreichbar sind -
+    das bereits ingestierte Universum ist für ein Retraining ohnehin die
+    relevante Grundmenge.
+    """
+    client = get_client()
+    sql = f"SELECT DISTINCT ticker FROM '{MEASUREMENT}'"
+    result = client.query(query=sql)
+
+    if result is None:
+        return []
+
+    data = result.to_pydict()
+    return list(data.get("ticker", []))
+
+
 def _build_ticker_query(ticker, start_str, end_str) -> tuple[str, dict]:
     sql = (
         f"SELECT * FROM '{MEASUREMENT}' WHERE ticker = $ticker "
