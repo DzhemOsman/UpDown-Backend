@@ -7,11 +7,10 @@ import pickle
 
 import pandas as pd
 
-from app.repositories.influx_repository import get_data_for_ticker_and_range
-
 # Importiere eure bewährten Komponenten
 from app.services.feature_engineering import build_features
 from app.services.ingestion import DEFAULT_END, DEFAULT_START
+from app.services.market_data import fetch_ticker_data
 
 logger = logging.getLogger(__name__)
 MODEL_DIR = "models"
@@ -44,10 +43,12 @@ def predict_ticker_trend(ticker: str, date_str: str) -> dict:
     # 1. Modell gecacht abrufen
     model = get_model(ticker)
 
-    # 2. Rohdaten für die Berechnung aus InfluxDB ziehen (Zielaktie + Indizes)
-    df_target = get_data_for_ticker_and_range(ticker, DEFAULT_START, DEFAULT_END)
-    df_market = get_data_for_ticker_and_range("^GSPC", DEFAULT_START, DEFAULT_END)
-    df_vix = get_data_for_ticker_and_range("^VIX", DEFAULT_START, DEFAULT_END)
+    # 2. Rohdaten für die Berechnung aus InfluxDB ziehen (Zielaktie + Indizes).
+    # fetch_ticker_data lädt bei fehlenden/unvollständigen Daten automatisch per
+    # yfinance nach (siehe market_data.py) - kein manuelles Vor-Ingesten nötig.
+    df_target = fetch_ticker_data(ticker, DEFAULT_START, DEFAULT_END)
+    df_market = fetch_ticker_data("^GSPC", DEFAULT_START, DEFAULT_END)
+    df_vix = fetch_ticker_data("^VIX", DEFAULT_START, DEFAULT_END)
 
     if df_target.empty or df_market.empty or df_vix.empty:
         raise ValueError(

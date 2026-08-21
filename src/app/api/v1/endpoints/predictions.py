@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 
+from app.core.exceptions import DataSourceError
 from app.schemas.api.predict_request import PredictRequest
 from app.services.prediction import predict_ticker_trend
 
@@ -21,6 +22,10 @@ def get_prediction(request: PredictRequest):
         return result
     except FileNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except DataSourceError:
+        # Externe Datenquelle (InfluxDB/Yahoo Finance) nicht erreichbar - an den
+        # globalen Handler in main.py durchreichen, der daraus 503 macht.
+        raise
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except Exception as exc:
