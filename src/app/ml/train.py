@@ -42,15 +42,15 @@ def get_device() -> torch.device:
 def train_model():
     """Trainiert das PyTorch LSTM Multi-Asset-Modell."""
     device = get_device()
-    logger.info(f"🚀 Starte PyTorch Training. Genutzte Hardware: {device}")
+    logger.info(f"Starte PyTorch Training. Genutzte Hardware: {device}")
 
     # ==========================
     # 1. DATEN LADEN
     # ==========================
-    logger.info("⏳ Lade 3D-Tensoren aus der InfluxDB (dies kann kurz dauern)...")
+    logger.info("Lade 3D-Tensoren aus der InfluxDB (dies kann kurz dauern)...")
     X_train_t, y_train_t, X_test_t, y_test_t, scaler = build_tensor_dataset()
 
-    logger.info(f"📊 Trainings-Batches: ~{len(X_train_t) // BATCH_SIZE}")
+    logger.info(f"Trainings-Batches: ~{len(X_train_t) // BATCH_SIZE}")
 
     # 2. PyTorch Datasets initialisieren
     train_dataset = MarketDataset(X_train_t, y_train_t)
@@ -65,10 +65,10 @@ def train_model():
     # ==========================
     # 4. MODELL & LOSS SETUP
     # ==========================
-    logger.info("⚖️ Berechne Klassen-Gewichte (Class Weights)...")
+    logger.info("Berechne Klassen-Gewichte (Class Weights)...")
     pos_weight = MarketDataset.compute_pos_weight(y_train_t).to(device)
 
-    logger.info("🏗️ Initialisiere MarketLSTM Modell...")
+    logger.info("Initialisiere MarketLSTM Modell...")
     model = MarketLSTM(
         input_size=X_train_t.shape[-1],
         hidden_size=HIDDEN_SIZE,
@@ -82,7 +82,7 @@ def train_model():
     # ==========================
     # 5. DER TRAININGSLOOP
     # ==========================
-    logger.info("🔥 Beginne Epochen-Training...")
+    logger.info("Beginne Epochen-Training...")
     for epoch in range(1, EPOCHS + 1):
         model.train()
         epoch_loss = 0.0
@@ -131,7 +131,7 @@ def train_model():
     # ==========================
     # 6. EVALUIERUNG
     # ==========================
-    logger.info("🔍 Starte Evaluierung auf unbekannten Testdaten...")
+    logger.info("Starte Evaluierung auf unbekannten Testdaten...")
     model.eval()
 
     all_preds = []
@@ -142,7 +142,7 @@ def train_model():
             batch_X = batch_X.to(device)
             logits = model(batch_X)
             probs = torch.sigmoid(logits)
-            preds = (probs >= 0.45).float()
+            preds = (probs >= 0.5).float()
 
             all_preds.extend(preds.cpu().numpy())
             all_targets.extend(batch_y.numpy())
@@ -162,12 +162,12 @@ def train_model():
 
     # LSTM-Gewichte sichern
     torch.save(model.state_dict(), MODEL_PATH)
-    logger.info(f"🎉 Erfolg! Das LSTM-Modell wurde unter '{MODEL_PATH}' gesichert.")
+    logger.info(f"Erfolg! Das LSTM-Modell wurde unter '{MODEL_PATH}' gesichert.")
 
     # Scaler via Pickle sichern
     with open(SCALER_PATH, "wb") as f:
         pickle.dump(scaler, f)
-    logger.info(f"💾 Scaler erfolgreich unter '{SCALER_PATH}' gesichert.")
+    logger.info(f"Scaler erfolgreich unter '{SCALER_PATH}' gesichert.")
 
 
 if __name__ == "__main__":

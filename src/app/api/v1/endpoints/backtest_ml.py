@@ -143,13 +143,13 @@ class MLModelManager:
                     self.scaler = pickle.load(f)
                 self.feature_names = list(self.scaler.feature_names_in_)
                 logger.info(
-                    f"✅ Scaler geladen ({len(self.feature_names)} Features): "
+                    f"Scaler geladen ({len(self.feature_names)} Features): "
                     f"{self.feature_names}"
                 )
             else:
-                logger.error(f"🔴 Scaler nicht gefunden unter: {LSTM_SCALER_PATH}")
+                logger.error(f"Scaler nicht gefunden unter: {LSTM_SCALER_PATH}")
         except Exception:
-            logger.error("🚨 Fehler beim Laden des Scalers:\n" + traceback.format_exc())
+            logger.error("Fehler beim Laden des Scalers:\n" + traceback.format_exc())
 
         try:
             if self.feature_names and os.path.exists(LSTM_MODEL_PATH):
@@ -165,30 +165,30 @@ class MLModelManager:
                 model.load_state_dict(state_dict)
                 model.eval()
                 self.lstm_model = model
-                logger.info("✅ PyTorch LSTM-Modell geladen und einsatzbereit.")
+                logger.info("PyTorch LSTM-Modell geladen und einsatzbereit.")
             else:
                 logger.error(
-                    f"🔴 LSTM-Modell konnte nicht geladen werden (Scaler geladen: "
+                    f"LSTM-Modell konnte nicht geladen werden (Scaler geladen: "
                     f"{self.feature_names is not None}, Datei vorhanden: "
                     f"{os.path.exists(LSTM_MODEL_PATH)})."
                 )
         except Exception:
             logger.error(
-                "🚨 Fehler beim Laden des LSTM-Modells:\n" + traceback.format_exc()
+                "Fehler beim Laden des LSTM-Modells:\n" + traceback.format_exc()
             )
 
         try:
             if os.path.exists(LGBM_MODEL_PATH):
                 with open(LGBM_MODEL_PATH, "rb") as f:
                     self.lgbm_model = pickle.load(f)
-                logger.info("✅ LightGBM-Modell geladen und einsatzbereit.")
+                logger.info("LightGBM-Modell geladen und einsatzbereit.")
             else:
                 logger.error(
-                    f"🔴 LightGBM-Modell nicht gefunden unter: {LGBM_MODEL_PATH}"
+                    f"LightGBM-Modell nicht gefunden unter: {LGBM_MODEL_PATH}"
                 )
         except Exception:
             logger.error(
-                "🚨 Fehler beim Laden des LightGBM-Modells:\n" + traceback.format_exc()
+                "Fehler beim Laden des LightGBM-Modells:\n" + traceback.format_exc()
             )
 
         try:
@@ -196,20 +196,20 @@ class MLModelManager:
                 with open(LGBM_META_PATH, "r", encoding="utf-8") as f:
                     self.lgbm_meta = json.load(f)
                 logger.info(
-                    f"✅ LightGBM-Metadaten geladen (empfohlener Threshold: "
+                    f"LightGBM-Metadaten geladen (empfohlener Threshold: "
                     f"{self.lgbm_meta.get('recommended_threshold')}, Trainingsdaten "
                     f"bis: {self.lgbm_meta.get('data_end')})."
                 )
             else:
                 logger.warning(
-                    f"🟡 Keine Trainings-Metadaten für LightGBM gefunden "
+                    f"Keine Trainings-Metadaten für LightGBM gefunden "
                     f"({LGBM_META_PATH}), nutze Fallback-Threshold "
                     f"{DEFAULT_THRESHOLD} (kein Retraining-Skript gelaufen? "
                     f"-> python -m app.ml.train_lgbm)."
                 )
         except Exception:
             logger.error(
-                "🚨 Fehler beim Laden der LightGBM-Metadaten:\n"
+                "Fehler beim Laden der LightGBM-Metadaten:\n"
                 + traceback.format_exc()
             )
 
@@ -259,6 +259,12 @@ ml_manager = MLModelManager()
 
 @router.post("/unified", response_model=StrategyResultDict)
 def run_unified_backtest(req: BacktestRequest):
+    if req.is_lstm and req.is_lightgbm:
+        raise HTTPException(
+            status_code=422,
+            detail="Bitte genau ein ML-Modell wählen: is_lstm oder is_lightgbm.",
+        )
+
     try:
         all_trades: List[TradeResultDict] = []
         ticker_cache: dict[str, pd.DataFrame] = {}
@@ -276,7 +282,7 @@ def run_unified_backtest(req: BacktestRequest):
             )
             if market_returns is None or vix_close is None:
                 logger.error(
-                    "🔴 Markt-/VIX-Kontext (^GSPC/^VIX) konnte nicht aus InfluxDB "
+                    "Markt-/VIX-Kontext (^GSPC/^VIX) konnte nicht aus InfluxDB "
                     "geladen werden. ML-Signale bleiben für alle Ticker leer, bis "
                     "diese Daten vorhanden sind."
                 )
@@ -289,9 +295,9 @@ def run_unified_backtest(req: BacktestRequest):
             ml_threshold, staleness_warning = _resolve_threshold_and_staleness_warning(
                 ml_manager.lgbm_meta, req.end_date
             )
-            logger.info(f"🎯 LightGBM-Inferenz-Threshold: {ml_threshold:.3f}")
+            logger.info(f"LightGBM-Inferenz-Threshold: {ml_threshold:.3f}")
             if staleness_warning:
-                logger.warning(f"⚠️ {staleness_warning}")
+                logger.warning(f"{staleness_warning}")
 
         for ticker in req.tickers:
             df = get_data_for_ticker_and_range(ticker, lookback_start, req.end_date)
@@ -303,7 +309,7 @@ def run_unified_backtest(req: BacktestRequest):
 
             if "volume" not in df.columns:
                 logger.warning(
-                    f"🔴 [{ticker}] Spalte 'volume' fehlt in der Datenbank! "
+                    f"[{ticker}] Spalte 'volume' fehlt in der Datenbank! "
                     f"Überspringe Ticker."
                 )
                 continue
@@ -317,7 +323,7 @@ def run_unified_backtest(req: BacktestRequest):
                 features = build_features(df)
                 if features.empty:
                     logger.warning(
-                        f"🔴 [{ticker}] Zu wenig Historie für Feature-Engineering, "
+                        f"[{ticker}] Zu wenig Historie für Feature-Engineering, "
                         f"übersprungen."
                     )
                     continue
@@ -333,7 +339,7 @@ def run_unified_backtest(req: BacktestRequest):
 
                 if features.empty:
                     logger.warning(
-                        f"🔴 [{ticker}] Nach Markt-Join und 250-Tage-Fenster keine "
+                        f"[{ticker}] Nach Markt-Join und 250-Tage-Fenster keine "
                         f"Zeilen mehr übrig (zu kurze Historie für den gewählten "
                         f"Zeitraum), übersprungen."
                     )
@@ -354,20 +360,20 @@ def run_unified_backtest(req: BacktestRequest):
                         )
                 except RuntimeError as model_err:
                     logger.error(
-                        f"🔴 [{ticker}] ML-Inferenz fehlgeschlagen: {model_err}"
+                        f"[{ticker}] ML-Inferenz fehlgeschlagen: {model_err}"
                     )
                     probabilities, offset = np.array([]), 0
 
                 if len(probabilities) > 0:
                     logger.info(
-                        f"📊 [{ticker}] ML-Wahrscheinlichkeiten - "
+                        f"[{ticker}] ML-Wahrscheinlichkeiten - "
                         f"Min: {probabilities.min():.4f}, "
                         f"Max: {probabilities.max():.4f}, "
                         f"Avg: {probabilities.mean():.4f}, Anzahl: {len(probabilities)}"
                     )
                 else:
                     logger.warning(
-                        f"🔴 [{ticker}] Keine Wahrscheinlichkeiten berechnet "
+                        f"[{ticker}] Keine Wahrscheinlichkeiten berechnet "
                         f"(Modell nicht geladen oder zu kurze Historie nach "
                         f"Feature-Engineering)."
                     )
@@ -461,7 +467,7 @@ def run_unified_backtest(req: BacktestRequest):
 
     except Exception as e:
         logger.error("\n" + "=" * 60)
-        logger.error("🚨 KRITISCHER PYTHON ABSTURZ IN BACKTEST_ML:")
+        logger.error("KRITISCHER PYTHON ABSTURZ IN BACKTEST_ML:")
         logger.error(traceback.format_exc())
         logger.error("=" * 60 + "\n")
         raise HTTPException(status_code=500, detail=f"Backend Error: {str(e)}")

@@ -48,7 +48,7 @@ def predict_ticker(ticker: str):
         scaler = pickle.load(f)
 
     # 3. Marktdaten (Benchmarks) laden
-    logger.info(f"🔍 Lade Daten für {ticker}...")
+    logger.info(f"Lade Daten für {ticker}...")
     df_market = load_raw_influx(MARKET_INDEX)
     df_vix = load_raw_influx(VIX_INDEX)
     if df_market.empty or df_vix.empty:
@@ -131,7 +131,7 @@ def predict_ticker(ticker: str):
     prediction_class = "KAUFEN (1)" if probability >= 0.5 else "NICHT KAUFEN (0)"
 
     print("\n" + "=" * 50)
-    print(f"📈 LIVE PROGNOSE FÜR: {ticker}")
+    print(f"LIVE PROGNOSE FÜR: {ticker}")
     print("=" * 50)
     print(f"Letztes analysiertes Datum : {X_recent.index[-1].strftime('%Y-%m-%d')}")
     print(f"Modell Entscheidung        : {prediction_class}")

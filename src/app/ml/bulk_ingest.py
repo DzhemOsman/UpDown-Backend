@@ -68,6 +68,6 @@ if __name__ == "__main__":
         # Deine bestehende Ingestion-Routine starten
         ingest_all(tickers_200)
 
-        logger.info("🎉 Alle 200 Aktien erfolgreich in der InfluxDB gespeichert!")
+        logger.info("Alle 200 Aktien erfolgreich in der InfluxDB gespeichert!")
     except Exception as e:
         logger.error(f"Fehler beim Bulk-Ingest: {e}")

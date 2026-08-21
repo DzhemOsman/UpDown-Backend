@@ -68,12 +68,14 @@ def load_labeled_features_per_ticker(
     """
     df_market = load_raw_influx(MARKET_INDEX, end_date)
     df_vix = load_raw_influx(VIX_INDEX, end_date)
+    if df_market.empty or df_vix.empty:
+        raise RuntimeError("Globale Marktdaten (^GSPC/^VIX) fehlen in der InfluxDB.")
     market_returns = df_market["close"].pct_change(1).rename("market_return_1d")
     vix_close = df_vix["close"].rename("vix_close")
 
     results: list[tuple[str, pd.DataFrame, pd.Series]] = []
 
-    logger.info("⏳ Berechne Features für das Universum...")
+    logger.info("Berechne Features für das Universum...")
     for ticker in tickers:
         df_target = load_raw_influx(ticker, end_date)
         if df_target.empty or len(df_target) < (SEQ_LEN + HORIZON_N + 50):
@@ -138,7 +140,7 @@ def build_tensor_dataset() -> tuple[
 
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaler.fit(global_train_matrix)
-    logger.info("🔒 MinMaxScaler erfolgreich NUR auf globalen Trainingsdaten gefittet.")
+    logger.info("MinMaxScaler erfolgreich NUR auf globalen Trainingsdaten gefittet.")
 
     # --- SCHRITT 3: Windowing pro Ticker isoliert ---
     X_train_list, y_train_list = [], []
@@ -173,7 +175,7 @@ def build_tensor_dataset() -> tuple[
     X_test_t = torch.tensor(np.array(X_test_list), dtype=torch.float32)
     y_test_t = torch.tensor(np.array(y_test_list), dtype=torch.float32).unsqueeze(1)
 
-    logger.info(f"✅ Tensoren fertig! X_train Shape: {X_train_t.shape}")
+    logger.info(f"Tensoren fertig! X_train Shape: {X_train_t.shape}")
     return X_train_t, y_train_t, X_test_t, y_test_t, scaler
 
 
@@ -206,9 +208,9 @@ class MarketDataset(Dataset):
 
         weight = negatives / positives
         logger.info(
-            f"⚖️ Klassen-Verteilung berechnet: Positives={int(positives)}, "
+            f"Klassen-Verteilung berechnet: Positives={int(positives)}, "
             f"Negatives={int(negatives)}"
         )
-        logger.info(f"⚖️ Empfohlenes Loss pos_weight: {weight.item():.4f}")
+        logger.info(f"Empfohlenes Loss pos_weight: {weight.item():.4f}")
 
         return weight.clone().detach().to(torch.float32)
