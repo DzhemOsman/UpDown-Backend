@@ -13,12 +13,13 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sklearn.preprocessing import MinMaxScaler
 
+from app.core.exceptions import DataSourceError
 from app.ml.dataset import COLS_TO_DROP, SEQ_LEN
 from app.ml.model import MarketLSTM
-from app.repositories.influx_repository import get_data_for_ticker_and_range
 from app.schemas.internal.strategy_result_dict import StrategyResultDict
 from app.schemas.internal.trade_result_dict import TradeResultDict
 from app.services.feature_engineering import build_features
+from app.services.market_data import fetch_ticker_data
 from app.services.mean_reversion_strategies.strategy_calculations import (
     calculate_strategy_result,
 )
@@ -73,8 +74,14 @@ def _load_market_context(
 ) -> tuple[pd.Series | None, pd.Series | None]:
     """Lädt ^GSPC/^VIX einmal pro Request, exakt wie in dataset.py/predict.py
     fürs Training."""
-    df_market = get_data_for_ticker_and_range(MARKET_INDEX, start, end)
-    df_vix = get_data_for_ticker_and_range(VIX_INDEX, start, end)
+    try:
+        df_market = fetch_ticker_data(MARKET_INDEX, start, end)
+        df_vix = fetch_ticker_data(VIX_INDEX, start, end)
+    except DataSourceError as exc:
+        # Infra-Fehler (InfluxDB/yfinance) darf nicht den ganzen Request killen:
+        # ohne Markt-Kontext bleiben die ML-Signale leer, der Aufrufer loggt das.
+        logger.error(f"Markt-/VIX-Kontext nicht ladbar: {exc}")
+        return None, None
 
     if df_market is None or df_market.empty or df_vix is None or df_vix.empty:
         return None, None
@@ -297,7 +304,15 @@ def run_unified_backtest(req: BacktestRequest):
                 logger.warning(f"{staleness_warning}")
 
         for ticker in req.tickers:
-            df = get_data_for_ticker_and_range(ticker, lookback_start, req.end_date)
+            # Service-Schicht statt rohem Repository-Read: fehlt der Zeitraum in
+            # InfluxDB (neuer Ticker oder veralteter Cache), lädt fetch_ticker_data
+            # ihn per yfinance nach. lookback_start sorgt dafür, dass auch der
+            # Warmup-Puffer (Indikatoren, 250d-Fenster, LSTM-Sequenz) mitkommt.
+            try:
+                df = fetch_ticker_data(ticker, lookback_start, req.end_date)
+            except DataSourceError as exc:
+                logger.warning(f"[{ticker}] Daten nicht ladbar, übersprungen: {exc}")
+                continue
 
             if df is None or df.empty:
                 continue
