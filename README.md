@@ -104,7 +104,9 @@ Das Backend ist nun unter http://localhost:8000 erreichbar. Die interaktive API-
 
 ## ML-Modelle lokal regenerieren
 
-Die trainierten Modelle (`models/*.pkl`, `*.pth`, `*.json`) sind **nicht** Teil des Git-Repos (siehe `.gitignore`) - jede:r trainiert sie lokal selbst. Reihenfolge:
+Die trainierten Modelle (`models/*.pkl`, `*.pth`, `*.json`) **sind Teil des Git-Repos**. Grund: Training kostet auf der Produktions-VM unnötig Rechenzeit/Geld, daher wird lokal trainiert und das fertige Modell einfach mit committed - die VM trainiert nie selbst, sondern lädt die fertigen Artefakte per `git pull` und bindet `models/` per Volume in den Container ein (siehe `docker-compose.prod.yml`).
+
+Reihenfolge zum (Re-)Trainieren:
 
 1. **Diversifiziertes Ticker-Universum + Marktkontext in InfluxDB laden** (S&P 500 + DAX, ^GSPC, ^VIX - einmalig bzw. bei Bedarf erneut, dauert je nach Internetverbindung mehrere Minuten):
    ```bash
@@ -121,5 +123,6 @@ Die trainierten Modelle (`models/*.pkl`, `*.pth`, `*.json`) sind **nicht** Teil 
    $env:PYTHONPATH="src"
    python -m app.ml.train
    ```
+4. **Neue Modell-Dateien committen und nach `master` pushen** (bzw. per Pull Request). Nach dem Deploy reicht auf der VM ein Container-Neustart (`docker compose -f docker-compose.prod.yml restart api`), damit die neuen Artefakte geladen werden - kein Rebuild und kein Training auf der VM nötig.
 
 Empfehlung: Retraining alle paar Monate wiederholen, damit die Modelle nicht auf einem veralteten Marktstand "einfrieren" (siehe `recommended_threshold`/`data_end` in der jeweiligen `*.meta.json` sowie die Staleness-Warnung im Backend-Log, wenn ein Backtest-Zeitraum deutlich über das Trainingsende hinausgeht).

@@ -48,11 +48,7 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
-# Model artefacts - trainierte Modelle sind Build-Artefakte, keine Quelltexte.
-# Lokal regenerieren via bulk_ingest.py + train_lgbm.py / train.py (siehe README).
-models/
-*.pkl
+# Nicht genutzte Modell-Serialisierungsformate
 *.joblib
 *.h5
 *.onnx
-*.pth
