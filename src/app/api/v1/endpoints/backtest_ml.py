@@ -183,9 +183,7 @@ class MLModelManager:
                     self.lgbm_model = pickle.load(f)
                 logger.info("LightGBM-Modell geladen und einsatzbereit.")
             else:
-                logger.error(
-                    f"LightGBM-Modell nicht gefunden unter: {LGBM_MODEL_PATH}"
-                )
+                logger.error(f"LightGBM-Modell nicht gefunden unter: {LGBM_MODEL_PATH}")
         except Exception:
             logger.error(
                 "Fehler beim Laden des LightGBM-Modells:\n" + traceback.format_exc()
@@ -209,8 +207,7 @@ class MLModelManager:
                 )
         except Exception:
             logger.error(
-                "Fehler beim Laden der LightGBM-Metadaten:\n"
-                + traceback.format_exc()
+                "Fehler beim Laden der LightGBM-Metadaten:\n" + traceback.format_exc()
             )
 
     def _align_features(self, features_df: pd.DataFrame) -> pd.DataFrame:
@@ -359,9 +356,7 @@ def run_unified_backtest(req: BacktestRequest):
                             inference_features
                         )
                 except RuntimeError as model_err:
-                    logger.error(
-                        f"[{ticker}] ML-Inferenz fehlgeschlagen: {model_err}"
-                    )
+                    logger.error(f"[{ticker}] ML-Inferenz fehlgeschlagen: {model_err}")
                     probabilities, offset = np.array([]), 0
 
                 if len(probabilities) > 0:
